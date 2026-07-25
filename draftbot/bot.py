@@ -375,26 +375,11 @@ class DraftBot(discord.Client):
         *,
         increment: Optional[int] = None,
         amount: Optional[int] = None,
-        confirmed: bool = False,
     ) -> None:
         session = self.sessions.get(thread_id)
         if session is None:
             await _reply_ephemeral(interaction, self.missing_session_message())
             return
-        if not confirmed:
-            preview = ui.confirm_preview(
-                session.state, interaction.user.id, lot_seq, increment, amount
-            )
-            if preview is not None:
-                lot = session.state.lot
-                assert lot is not None
-                await interaction.response.send_message(
-                    f"⚠️ Confirm **${preview}** on **{lot.player.name}**? "
-                    "That's at least half your remaining budget.",
-                    view=ui.confirm_view(thread_id, lot_seq, preview),
-                    ephemeral=True,
-                )
-                return
         event = Bid(
             user_id=interaction.user.id,
             lot_seq=lot_seq,
@@ -404,13 +389,7 @@ class DraftBot(discord.Client):
         )
         effects = await self.apply_event(session, event)
         await self.render(session, effects, interaction)
-        if interaction.response.is_done():
-            return
-        if confirmed:  # kill the ephemeral confirm button
-            await interaction.response.edit_message(
-                content=f"✅ Bid placed — ${amount}.", view=None
-            )
-        else:
+        if not interaction.response.is_done():
             await interaction.response.defer()
 
     async def handle_cancel_confirm(

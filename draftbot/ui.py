@@ -134,32 +134,6 @@ def pool_count(state: DraftState) -> int:
     return len(state.queue) + (1 if state.lot is not None else 0)
 
 
-def confirm_preview(
-    state: DraftState,
-    user_id: int,
-    lot_seq: int,
-    increment: Optional[int],
-    amount: Optional[int],
-) -> Optional[int]:
-    """Would-be bid amount when the 50%-of-budget confirm rule applies, else
-    None. Lock-free preview — the engine stays the authority on the bid."""
-    lot = state.lot
-    manager = state.manager(user_id)
-    if (
-        state.phase != "auction"
-        or state.paused
-        or lot is None
-        or lot.seq != lot_seq
-        or manager is None
-        or lot.leader_id == user_id
-    ):
-        return None
-    would_be = amount if amount is not None else lot.current_bid + (increment or 0)
-    if lot.current_bid < would_be <= manager.budget and 2 * would_be >= manager.budget:
-        return would_be
-    return None
-
-
 def teams_for_sim(state: DraftState) -> list[dict]:
     """Sim input per sim.run_stats/run_ai; manager names deduped defensively."""
     seen: set[str] = set()
@@ -497,33 +471,11 @@ class CustomBidButton(
         )
 
 
-class ConfirmBidButton(
-    _FromIntGroups,
-    discord.ui.DynamicItem[discord.ui.Button],
-    template=r"nba:conf:(?P<thread>[0-9]+):(?P<lot>[0-9]+):(?P<amount>[0-9]+)",
-):
-    def __init__(self, thread_id: int, lot_seq: int, amount: int) -> None:
-        super().__init__(_btn(
-            f"Confirm ${amount}", discord.ButtonStyle.danger,
-            f"nba:conf:{thread_id}:{lot_seq}:{amount}",
-        ))
-        self.thread_id = thread_id
-        self.lot_seq = lot_seq
-        self.amount = amount
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await _bot(interaction).handle_bid(
-            interaction, self.thread_id, self.lot_seq,
-            amount=self.amount, confirmed=True,
-        )
-
-
 DYNAMIC_ITEMS: tuple[type, ...] = (
     JoinButton,
     LeaveButton,
     QuickBidButton,
     CustomBidButton,
-    ConfirmBidButton,
 )
 
 
@@ -544,12 +496,6 @@ def bid_view(
     for increment in quick_bids:
         view.add_item(QuickBidButton(thread_id, lot_seq, increment))
     view.add_item(CustomBidButton(thread_id, lot_seq))
-    return view
-
-
-def confirm_view(thread_id: int, lot_seq: int, amount: int) -> discord.ui.View:
-    view = discord.ui.View(timeout=None)
-    view.add_item(ConfirmBidButton(thread_id, lot_seq, amount))
     return view
 
 

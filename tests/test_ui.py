@@ -18,7 +18,6 @@ DYNAMIC_CASES = [
     (ui.LeaveButton, (123,)),
     (ui.QuickBidButton, (123, 7, 5)),
     (ui.CustomBidButton, (123, 7)),
-    (ui.ConfirmBidButton, (123, 7, 19)),
 ]
 
 
@@ -53,7 +52,6 @@ def test_persistent_views_never_time_out():
     # The default View(timeout=180) would silently kill buttons mid-auction.
     assert ui.lobby_view(1).timeout is None
     assert ui.bid_view(1, 2, (1, 2, 5)).timeout is None
-    assert ui.confirm_view(1, 2, 10).timeout is None
 
 
 def test_bid_view_layout():

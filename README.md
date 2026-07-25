@@ -115,8 +115,7 @@ private GitHub repo, clone with a fine-grained token URL
 2. Everyone clicks **Join** in the lobby (2–10 managers).
 3. The commissioner runs `/draft start`. The board tracks budgets and
    rosters and is reposted at the bottom of the thread after every sale.
-4. Bid with **+$1 / +$2 / +$5** or **Custom…** on each lot card. Bids at or
-   above half your remaining budget ask for a confirm tap. The high bidder
+4. Bid with **+$1 / +$2 / +$5** or **Custom…** on each lot card. The high bidder
    when the flat clock expires pays and the player slots into their team.
 5. The last manager with money left picks the rest of their roster free via
    `/pick` (with autocomplete); everyone else's empty slots auto-fill.

@@ -65,8 +65,7 @@ an LLM ranking) and crowns a champion.
      then $7 — both succeed). The **Custom…** modal takes an absolute amount and
      is rejected if ≤ current by the time it's submitted.
    - Server arrival order is authoritative; bids landing after the timer fires
-     are void. Bids are binding — no retraction. Bids ≥ 50% of remaining budget
-     get a confirm tap.
+     are void. Bids are binding — no retraction.
 9. **Sold:** winner pays, the player is auto-placed into their first empty slot.
    Placement is fully flexible — **any player can occupy any slot** (a center can
    play point guard). `/swap` rearranges your own slots any time before the draft
