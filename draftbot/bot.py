@@ -1,7 +1,7 @@
 """Discord wiring: client, sessions, dispatch, timers, effect renderer,
 slash commands, and crash recovery.
 
-Every state change funnels through ``DraftBot.dispatch`` — engine.apply under
+Every state change funnels through ``DraftBot.apply_event`` — engine.apply under
 the session lock, snapshot at meaningful boundaries, then render the effects
 outside the critical section. Persistent messages are always edited by stored
 message id, never via interaction tokens (which die after 15 minutes).
@@ -166,7 +166,7 @@ class DraftBot(discord.Client):
 
     # ------------------------------------------------------------ dispatch
 
-    async def dispatch(self, session: DraftSession, event: Any) -> list[Effect]:
+    async def apply_event(self, session: DraftSession, event: Any) -> list[Effect]:
         """The only path for state changes: apply + commit + snapshot under
         the lock. engine.apply is pure and synchronous — no awaits between
         read and commit. Timer effects are processed here at commit time —
@@ -254,7 +254,7 @@ class DraftBot(discord.Client):
         event = TimerExpired(
             kind=kind, lot_seq=lot_seq, deadline=deadline, now=time.time()
         )
-        effects = await self.dispatch(session, event)
+        effects = await self.apply_event(session, event)
         await self.render(session, effects)
 
     # --------------------------------------------------------------- board
@@ -316,7 +316,7 @@ class DraftBot(discord.Client):
         if session is None:
             await _reply_ephemeral(interaction, self.missing_session_message())
             return
-        effects = await self.dispatch(
+        effects = await self.apply_event(
             session, Join(interaction.user.id, interaction.user.display_name)
         )
         await self.render(session, effects, interaction)
@@ -336,7 +336,7 @@ class DraftBot(discord.Client):
         if session is None:
             await _reply_ephemeral(interaction, self.missing_session_message())
             return
-        effects = await self.dispatch(session, Leave(interaction.user.id))
+        effects = await self.apply_event(session, Leave(interaction.user.id))
         await self.render(session, effects, interaction)
         if interaction.response.is_done():
             return
@@ -383,7 +383,7 @@ class DraftBot(discord.Client):
             increment=None if amount is not None else increment,
             amount=amount,
         )
-        effects = await self.dispatch(session, event)
+        effects = await self.apply_event(session, event)
         await self.render(session, effects, interaction)
         if interaction.response.is_done():
             return
@@ -401,7 +401,7 @@ class DraftBot(discord.Client):
         if session is None:
             await _reply_ephemeral(interaction, self.missing_session_message())
             return
-        effects = await self.dispatch(
+        effects = await self.apply_event(
             session, Cancel(_admin_user_id(session, interaction))
         )
         if any(isinstance(fx, ErrorFx) for fx in effects):
@@ -627,7 +627,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
             players, config.era_start, config.era_end
         )
         try:
-            effects = await bot.dispatch(
+            effects = await bot.apply_event(
                 session,
                 Start(_admin_user_id(session, interaction), players, time.time()),
             )
@@ -661,7 +661,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
     ) -> None:
         if (session := await require_session(interaction)) is None:
             return
-        effects = await bot.dispatch(
+        effects = await bot.apply_event(
             session, event_cls(_admin_user_id(session, interaction), time.time())
         )
         await bot.render(session, effects, interaction)
@@ -750,7 +750,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
             replacement_id=replacement.id if replacement else None,
             replacement_name=replacement.display_name if replacement else None,
         )
-        effects = await bot.dispatch(session, event)
+        effects = await bot.apply_event(session, event)
         await bot.render(session, effects, interaction)
         if interaction.response.is_done():
             return
@@ -785,7 +785,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
     ) -> None:
         if (session := await require_session(interaction)) is None:
             return
-        effects = await bot.dispatch(
+        effects = await bot.apply_event(
             session, Swap(interaction.user.id, slot_a, slot_b)
         )
         await bot.render(session, effects, interaction)
@@ -840,7 +840,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
     ) -> None:
         if (session := await require_session(interaction)) is None:
             return
-        effects = await bot.dispatch(
+        effects = await bot.apply_event(
             session, Pick(interaction.user.id, player, time.time())
         )
         await bot.render(session, effects, interaction)
