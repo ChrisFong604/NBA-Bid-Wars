@@ -116,7 +116,7 @@ def test_stats_score_formula():
     assert result.standings[0] == ("A", 42.5)
     assert result.champion == "A"
     assert result.summary == ""
-    assert result.blended is False
+    assert result.summary == ""
 
 
 def test_stats_deterministic():
@@ -182,7 +182,7 @@ def test_ai_blend_hand_checked_three_teams(monkeypatch):
     assert [score for _, score in result.standings] == pytest.approx([1.4, 1.2, 0.4])
     assert result.champion == "B"
     assert result.summary == "B ran the table."
-    assert result.blended is True
+    assert result.summary != ""
 
 
 def test_ai_blend_ties_break_by_stats_order(monkeypatch):
@@ -339,7 +339,7 @@ def test_fenced_json_output_parses(monkeypatch):
     _patch_client(monkeypatch, _response(fenced))
     result = asyncio.run(sim.run_ai(teams))
     assert result.summary == canned.summary
-    assert result.blended is True
+    assert result.summary != ""
 
 
 def test_json_wrapped_in_prose_parses(monkeypatch):

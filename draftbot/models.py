@@ -8,7 +8,6 @@ where effects are *descriptions* of what the outside world should do.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Union
 
 SLOTS: tuple[str, ...] = ("PG", "SG", "SF", "PF", "C")
 
@@ -49,7 +48,7 @@ class Config:
 @dataclass(frozen=True)
 class Spot:
     slot: str  # "PG" etc. — the lineup slot, not the player's natural pos
-    player: Optional[Player] = None
+    player: Player | None = None
     price: int = 0  # 0 for free assignments (picks / auto-fill)
 
 
@@ -77,7 +76,7 @@ class Lot:
     player: Player
     last_call: bool  # second appearance — sells or force-assigns, never recycles
     current_bid: int = 0  # 0 = no opening bid yet (opening window)
-    leader_id: Optional[int] = None
+    leader_id: int | None = None
     deadline: float = 0.0  # epoch seconds; authoritative over any client render
 
 
@@ -85,7 +84,7 @@ class Lot:
 class LogEntry:
     kind: str  # sold | force | passed | pick | autofill
     player: Player
-    manager_id: Optional[int]  # None for a first-pass recycle
+    manager_id: int | None  # None for a first-pass recycle
     price: int
 
 
@@ -97,14 +96,14 @@ class DraftState:
     managers: tuple[Manager, ...] = ()
     queue: tuple[Player, ...] = ()  # hidden upcoming players; head is next up
     passed_ids: frozenset = field(default_factory=frozenset)  # passed once
-    lot: Optional[Lot] = None
+    lot: Lot | None = None
     lot_seq: int = 0  # last dealt lot number (1-based)
     pick_deadline: float = 0.0  # free-pick phase only
     log: tuple[LogEntry, ...] = ()
     paused: bool = False
     pause_remaining: float = 0.0
 
-    def manager(self, user_id: int) -> Optional[Manager]:
+    def manager(self, user_id: int) -> Manager | None:
         return next((m for m in self.managers if m.user_id == user_id), None)
 
     @property
@@ -148,8 +147,8 @@ class Bid:
     user_id: int
     lot_seq: int
     now: float
-    increment: Optional[int] = None
-    amount: Optional[int] = None
+    increment: int | None = None
+    amount: int | None = None
 
 
 @dataclass(frozen=True)
@@ -195,8 +194,8 @@ class Kick:
     user_id: int  # commissioner issuing the kick
     target_id: int
     now: float
-    replacement_id: Optional[int] = None
-    replacement_name: Optional[str] = None
+    replacement_id: int | None = None
+    replacement_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -204,10 +203,10 @@ class Cancel:
     user_id: int
 
 
-Event = Union[
-    Join, Leave, Start, Bid, TimerExpired, Pick, Swap, Pause, Resume, Kick,
-    Cancel,
-]
+Event = (
+    Join | Leave | Start | Bid | TimerExpired | Pick | Swap | Pause | Resume
+    | Kick | Cancel
+)
 
 
 # ------------------------------------------------------------------ effects
@@ -302,7 +301,7 @@ class PausedFx:
 
 @dataclass(frozen=True)
 class ResumedFx:
-    lot: Optional[Lot]  # carries the recomputed deadline
+    lot: Lot | None  # carries the recomputed deadline
 
 
 @dataclass(frozen=True)
@@ -315,8 +314,9 @@ class LobbyFx:  # lobby membership changed; re-render the lobby message
     pass
 
 
-Effect = Union[
-    LotOpened, BidPlaced, SoldFx, PassedFx, ForceAssignedFx, FreePickFx,
-    PickedFx, AutoFilledFx, CompleteFx, ArmTimerFx, CancelTimerFx, BoardFx,
-    ErrorFx, AutopilotFx, PausedFx, ResumedFx, CancelledFx, LobbyFx,
-]
+Effect = (
+    LotOpened | BidPlaced | SoldFx | PassedFx | ForceAssignedFx | FreePickFx
+    | PickedFx | AutoFilledFx | CompleteFx | ArmTimerFx | CancelTimerFx
+    | BoardFx | ErrorFx | AutopilotFx | PausedFx | ResumedFx | CancelledFx
+    | LobbyFx
+)

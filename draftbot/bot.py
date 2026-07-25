@@ -14,9 +14,9 @@ import os
 import random
 import time
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import discord
 from discord import app_commands
@@ -79,7 +79,7 @@ _reply_ephemeral = ui.reply_ephemeral
 
 
 def _admin_user_id(
-    session: "DraftSession", interaction: discord.Interaction
+    session: DraftSession, interaction: discord.Interaction
 ) -> int:
     """Rule #18: the commissioner is the creator; Manage Server permission
     is the fallback. Returns the commissioner id when the caller is
@@ -111,13 +111,13 @@ class DraftSession:
     thread: discord.Thread
     channel_id: int
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    timer_task: Optional[asyncio.Task] = None
-    board_task: Optional[asyncio.Task] = None
-    sim_task: Optional[asyncio.Task] = None
-    lobby_message_id: Optional[int] = None
-    board_message_id: Optional[int] = None
-    lot_message_id: Optional[int] = None
-    pick_message_id: Optional[int] = None
+    timer_task: asyncio.Task | None = None
+    board_task: asyncio.Task | None = None
+    sim_task: asyncio.Task | None = None
+    lobby_message_id: int | None = None
+    board_message_id: int | None = None
+    lot_message_id: int | None = None
+    pick_message_id: int | None = None
 
     @property
     def thread_id(self) -> int:
@@ -177,7 +177,7 @@ class DraftBot(discord.Client):
             session.state = new_state
             effects = self._apply_timer_effects(session, effects)
             if any(isinstance(fx, SNAPSHOT_EFFECTS) for fx in effects):
-                self._save(session)
+                await self._save(session)
         return effects
 
     def _apply_timer_effects(
@@ -209,10 +209,13 @@ class DraftBot(discord.Client):
             "pick_message_id": session.pick_message_id,
         }
 
-    def _save(self, session: DraftSession) -> None:
+    async def _save(self, session: DraftSession) -> None:
         SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
         try:
-            store.save_snapshot(
+            # to_thread keeps the fsync/os.replace off the event loop; it
+            # re-raises into this task, so the try/except still applies.
+            await asyncio.to_thread(
+                store.save_snapshot,
                 self._snapshot_path(session.thread_id),
                 session.state,
                 self._meta(session),
@@ -287,7 +290,7 @@ class DraftBot(discord.Client):
                 log.exception("old board delete failed for %s", session.thread_id)
         if session.state.phase not in ("complete", "cancelled"):
             async with session.lock:
-                self._save(session)  # board_message_id changed → refresh meta
+                await self._save(session)  # board_message_id changed → refresh meta
 
     # ------------------------------------------------------------ renderer
 
@@ -295,7 +298,7 @@ class DraftBot(discord.Client):
         self,
         session: DraftSession,
         effects: list[Effect],
-        interaction: Optional[discord.Interaction] = None,
+        interaction: discord.Interaction | None = None,
     ) -> None:
         await ui.render_effects(self, session, effects, interaction)
 
@@ -341,12 +344,15 @@ class DraftBot(discord.Client):
         await self.render(session, effects, interaction)
         if interaction.response.is_done():
             return
-        if any(isinstance(fx, BoardFx) for fx in effects):  # mid-draft reclaim
-            await interaction.response.send_message(
-                "👋 Welcome back — you've reclaimed your team.", ephemeral=True
-            )
-        else:
-            await interaction.response.defer()
+        try:
+            if any(isinstance(fx, BoardFx) for fx in effects):  # mid-draft reclaim
+                await interaction.response.send_message(
+                    "👋 Welcome back — you've reclaimed your team.", ephemeral=True
+                )
+            else:
+                await interaction.response.defer()
+        except discord.HTTPException:
+            log.debug("final join ack failed", exc_info=True)
 
     async def handle_leave(
         self, interaction: discord.Interaction, thread_id: int
@@ -359,13 +365,16 @@ class DraftBot(discord.Client):
         await self.render(session, effects, interaction)
         if interaction.response.is_done():
             return
-        if any(isinstance(fx, AutopilotFx) for fx in effects):
-            await interaction.response.send_message(
-                "You've left — your team is on autopilot. Hit Join to reclaim it.",
-                ephemeral=True,
-            )
-        else:
-            await interaction.response.defer()
+        try:
+            if any(isinstance(fx, AutopilotFx) for fx in effects):
+                await interaction.response.send_message(
+                    "You've left — your team is on autopilot. Hit Join to reclaim it.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.response.defer()
+        except discord.HTTPException:
+            log.debug("final leave ack failed", exc_info=True)
 
     async def handle_bid(
         self,
@@ -373,8 +382,8 @@ class DraftBot(discord.Client):
         thread_id: int,
         lot_seq: int,
         *,
-        increment: Optional[int] = None,
-        amount: Optional[int] = None,
+        increment: int | None = None,
+        amount: int | None = None,
     ) -> None:
         session = self.sessions.get(thread_id)
         if session is None:
@@ -390,7 +399,10 @@ class DraftBot(discord.Client):
         effects = await self.apply_event(session, event)
         await self.render(session, effects, interaction)
         if not interaction.response.is_done():
-            await interaction.response.defer()
+            try:
+                await interaction.response.defer()
+            except discord.HTTPException:
+                log.debug("final bid ack failed", exc_info=True)
 
     async def handle_cancel_confirm(
         self, interaction: discord.Interaction, thread_id: int
@@ -486,7 +498,7 @@ class DraftBot(discord.Client):
                 new_state, effects = engine.redeal(current, now, self.rng)
                 session.state = new_state
                 effects = self._apply_timer_effects(session, effects)
-                self._save(session)
+                await self._save(session)
             await session.thread.send(
                 "♻️ Bot restarted — re-opening the current player."
             )
@@ -496,7 +508,7 @@ class DraftBot(discord.Client):
             async with session.lock:
                 session.state = replace(session.state, pick_deadline=deadline)
                 self._arm_timer(session, "pick", -1, deadline)
-                self._save(session)
+                await self._save(session)
             actives = session.state.active_managers
             if actives:
                 message = await session.thread.send(
@@ -513,21 +525,21 @@ class DraftBot(discord.Client):
 ERA_DECADES: tuple[int, ...] = tuple(range(1960, 2030, 10))
 
 
-def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
+def register_commands(bot: DraftBot) -> None:
     tree = bot.tree
     slot_choices = [app_commands.Choice(name=s, value=s) for s in SLOTS]
     era_choices = [
         app_commands.Choice(name=f"{d}s", value=d) for d in ERA_DECADES
     ]
 
-    def thread_session(interaction: discord.Interaction) -> Optional[DraftSession]:
+    def thread_session(interaction: discord.Interaction) -> DraftSession | None:
         if interaction.channel_id is None:
             return None
         return bot.sessions.get(interaction.channel_id)
 
     async def require_session(
         interaction: discord.Interaction,
-    ) -> Optional[DraftSession]:
+    ) -> DraftSession | None:
         session = thread_session(interaction)
         if session is None:
             await _reply_ephemeral(interaction, bot.missing_session_message())
@@ -541,7 +553,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         clock="Seconds each player stays on the block — flat, bids don't extend it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
-        sim="Post-draft tournament sim mode (default AI + stats)",
+        sim="Post-draft tournament sim mode (default off)",
     )
     @app_commands.choices(
         era_from=era_choices,
@@ -576,7 +588,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         await interaction.response.defer()
         try:
             thread = await channel.create_thread(
-                name=f"🏀 Draft — {date.today().isoformat()}",
+                name=f"🏀 Draft — {datetime.now(UTC).date().isoformat()}",
                 type=discord.ChannelType.public_thread,
                 auto_archive_duration=1440,
             )
@@ -607,11 +619,11 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         session.lobby_message_id = lobby.id
         bot.sessions[thread.id] = session
         async with session.lock:
-            bot._save(session)
+            await bot._save(session)
         try:
             await thread.add_user(interaction.user)
         except discord.HTTPException:
-            pass
+            log.debug("couldn't auto-add commissioner to thread", exc_info=True)
         await interaction.followup.send(
             f"🏀 Draft lobby open — head to {thread.mention} and hit Join!"
         )
@@ -652,7 +664,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         board = await session.thread.send(embed=ui.board_embed(session.state))
         session.board_message_id = board.id
         async with session.lock:
-            bot._save(session)
+            await bot._save(session)
         await bot.render(session, effects)
 
     async def _pause_or_resume(
@@ -665,7 +677,10 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         )
         await bot.render(session, effects, interaction)
         if not interaction.response.is_done():
-            await interaction.response.send_message(ack, ephemeral=True)
+            try:
+                await interaction.response.send_message(ack, ephemeral=True)
+            except discord.HTTPException:
+                log.debug("final pause/resume ack failed", exc_info=True)
 
     @draft.command(name="pause", description="Pause the draft (commissioner)")
     async def draft_pause(interaction: discord.Interaction) -> None:
@@ -687,8 +702,8 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
             return
         # Not an engine event: extend the live deadline in place under the
         # lock (same shape as a Resume) and re-arm the timer.
-        error: Optional[str] = None
-        arm: Optional[tuple[str, int, float]] = None
+        error: str | None = None
+        arm: tuple[str, int, float] | None = None
         async with session.lock:
             state = session.state
             if _admin_user_id(session, interaction) != state.commissioner_id:
@@ -700,13 +715,13 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
                 session.state = replace(state, lot=lot)
                 arm = ("lot", lot.seq, lot.deadline)
                 bot._arm_timer(session, *arm)  # commit-time, under the lock
-                bot._save(session)
+                await bot._save(session)
             elif state.phase == "free_pick":
                 deadline = state.pick_deadline + seconds
                 session.state = replace(state, pick_deadline=deadline)
                 arm = ("pick", -1, deadline)
                 bot._arm_timer(session, *arm)  # commit-time, under the lock
-                bot._save(session)
+                await bot._save(session)
             else:
                 error = "There's no live timer to extend."
         if error is not None:
@@ -738,7 +753,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
     async def draft_kick(
         interaction: discord.Interaction,
         user: discord.User,
-        replacement: Optional[discord.User] = None,
+        replacement: discord.User | None = None,
     ) -> None:
         if (session := await require_session(interaction)) is None:
             return
@@ -789,9 +804,12 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         )
         await bot.render(session, effects, interaction)
         if not interaction.response.is_done():
-            await interaction.response.send_message(
-                f"🔁 Swapped {slot_a} and {slot_b}.", ephemeral=True
-            )
+            try:
+                await interaction.response.send_message(
+                    f"🔁 Swapped {slot_a} and {slot_b}.", ephemeral=True
+                )
+            except discord.HTTPException:
+                log.debug("final swap ack failed", exc_info=True)
 
     @tree.command(
         name="status", description="Your roster, budget, and the pool count"
@@ -844,7 +862,12 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         )
         await bot.render(session, effects, interaction)
         if not interaction.response.is_done():
-            await interaction.response.send_message("🎯 Locked in.", ephemeral=True)
+            try:
+                await interaction.response.send_message(
+                    "🎯 Locked in.", ephemeral=True
+                )
+            except discord.HTTPException:
+                log.debug("final pick ack failed", exc_info=True)
 
     @tree.command(
         name="simulate",

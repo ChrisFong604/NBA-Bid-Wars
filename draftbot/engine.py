@@ -292,6 +292,7 @@ def _lot_expired(
     ):
         return state, []
     if lot.current_bid > 0:  # SOLD
+        assert lot.leader_id is not None
         winner = state.manager(lot.leader_id)
         assert winner is not None
         entry = LogEntry("sold", lot.player, winner.user_id, lot.current_bid)
@@ -360,11 +361,11 @@ def _resolve_next(
     if len(actives) == 1:
         deadline = now + state.config.free_pick_seconds
         state2 = replace(state, phase="free_pick", pick_deadline=deadline)
-        fx2: list[Effect] = [
+        pick_fx: list[Effect] = [
             FreePickFx(actives[0].user_id, state.queue, deadline),
             ArmTimerFx("pick", -1, deadline),
         ]
-        return state2, fx + fx2
+        return state2, fx + pick_fx
     return _auto_fill(state, rng, fx)
 
 

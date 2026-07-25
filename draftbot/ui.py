@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import discord
 
@@ -41,7 +41,7 @@ from .models import (
     ResumedFx,
     SoldFx,
 )
-from .sim import LLM_WEIGHT, SimResult
+from .sim import LLM_WEIGHT, SimResult, TeamDict
 
 if TYPE_CHECKING:
     from .bot import DraftBot, DraftSession
@@ -57,6 +57,8 @@ RED = 0xED4245
 GOLD = 0xF1C40F
 
 POOL_LINES_PER_EMBED = 25
+MAX_EMBEDS_PER_MESSAGE = 10  # Discord hard cap per message
+EMBED_CHAR_BUDGET = 5500  # headroom under Discord's 6000-char embed total
 CLOSE_BEAT_SECONDS = 2.0
 LOT_FOOTER = (
     "flat clock — bids never add time · bid up to your full remaining "
@@ -68,7 +70,7 @@ LAST_CALL_WARNING = "LAST CALL — passes again and they're force-assigned for $
 _NAME_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III", "IV", "V"})
 
 
-def _bot(interaction: discord.Interaction) -> "DraftBot":
+def _bot(interaction: discord.Interaction) -> DraftBot:
     from .bot import DraftBot  # runtime import — no cycle at module load
 
     client = interaction.client
@@ -134,10 +136,10 @@ def pool_count(state: DraftState) -> int:
     return len(state.queue) + (1 if state.lot is not None else 0)
 
 
-def teams_for_sim(state: DraftState) -> list[dict]:
+def teams_for_sim(state: DraftState) -> list[TeamDict]:
     """Sim input per sim.run_stats/run_ai; manager names deduped defensively."""
     seen: set[str] = set()
-    teams: list[dict] = []
+    teams: list[TeamDict] = []
     for m in state.managers:
         name = m.name if m.name not in seen else f"{m.name} ({m.user_id % 1000})"
         seen.add(name)
@@ -354,9 +356,8 @@ def sim_results_embed(result: SimResult) -> discord.Embed:
         description=standings,
         color=GOLD,
     )
-    if result.summary:
+    if result.summary:  # non-empty iff the standings blend in the LLM ranking
         embed.add_field(name="How it played out", value=result.summary, inline=False)
-    if result.blended:
         embed.set_footer(
             text=(
                 f"Standings: {round((1 - LLM_WEIGHT) * 100)}% stats / "
@@ -549,33 +550,40 @@ class CustomBidModal(discord.ui.Modal, title="Custom bid"):
 
 
 async def render_effects(
-    bot: "DraftBot",
-    session: "DraftSession",
+    bot: DraftBot,
+    session: DraftSession,
     effects: list[Effect],
-    interaction: Optional[discord.Interaction] = None,
+    interaction: discord.Interaction | None = None,
 ) -> None:
     """Turn engine effects into Discord I/O, in order. Runs outside the
-    session lock; the state committed by dispatch is already final."""
+    session lock; the state committed by dispatch is already final. The
+    state is captured once so the whole batch renders the snapshot it
+    belongs to, even if a concurrent commit swaps ``session.state``."""
     after_close = False
+    state = session.state
     for fx in effects:
         try:
-            after_close = await _render_one(bot, session, fx, interaction, after_close)
+            after_close = await _render_one(
+                bot, session, state, fx, interaction, after_close
+            )
         except discord.HTTPException:
             log.exception("render failed for %r", fx)
+        except Exception:
+            log.exception("unexpected render failure for %r", fx)
     if any(isinstance(fx, (LotOpened, FreePickFx)) for fx in effects):
         # New message ids were minted; refresh the snapshot's meta.
         async with session.lock:
-            bot._save(session)
+            await bot._save(session)
 
 
 async def _render_one(
-    bot: "DraftBot",
-    session: "DraftSession",
+    bot: DraftBot,
+    session: DraftSession,
+    state: DraftState,
     fx: Effect,
-    interaction: Optional[discord.Interaction],
+    interaction: discord.Interaction | None,
     after_close: bool,
 ) -> bool:
-    state = session.state
     if isinstance(fx, LotOpened):
         if after_close:  # rate-bucket-friendly beat between lots
             await asyncio.sleep(CLOSE_BEAT_SECONDS)
@@ -586,7 +594,7 @@ async def _render_one(
         session.lot_message_id = message.id
         return False
     if isinstance(fx, BidPlaced):
-        await _render_bid(session, fx, interaction)
+        await _render_bid(session, state, fx, interaction)
     elif isinstance(fx, SoldFx):
         winner = state.manager(fx.manager_id)
         assert winner is not None
@@ -630,22 +638,22 @@ async def _render_one(
     elif isinstance(fx, AutoFilledFx):
         await session.thread.send(embed=autofill_embed(fx.assignments))
     elif isinstance(fx, CompleteFx):
-        await _render_complete(bot, session)
+        await _render_complete(bot, session, state)
     elif isinstance(fx, PausedFx):
-        await _render_paused(session)
+        await _render_paused(session, state)
     elif isinstance(fx, ResumedFx):
-        await _render_resumed(session, fx)
+        await _render_resumed(session, state, fx)
     elif isinstance(fx, CancelledFx):
-        await _render_cancelled(bot, session)
+        await _render_cancelled(bot, session, state)
     elif isinstance(fx, LobbyFx):
-        await _render_lobby(session, interaction)
+        await _render_lobby(session, state, interaction)
     return after_close
 
 
 async def _edit_via_interaction_or_id(
-    session: "DraftSession",
-    interaction: Optional[discord.Interaction],
-    message_id: Optional[int],
+    session: DraftSession,
+    interaction: discord.Interaction | None,
+    message_id: int | None,
     embed: discord.Embed,
 ) -> None:
     """Edit by stored message id; when the triggering component sits on that
@@ -662,18 +670,19 @@ async def _edit_via_interaction_or_id(
 
 
 async def _render_bid(
-    session: "DraftSession",
+    session: DraftSession,
+    state: DraftState,
     fx: BidPlaced,
-    interaction: Optional[discord.Interaction],
+    interaction: discord.Interaction | None,
 ) -> None:
-    embed = lot_embed(fx.lot, pool_left=1 + len(session.state.queue))
+    embed = lot_embed(fx.lot, pool_left=1 + len(state.queue))
     await _edit_via_interaction_or_id(
         session, interaction, session.lot_message_id, embed
     )
 
 
 async def edit_lot(
-    session: "DraftSession", embed: discord.Embed, clear: bool
+    session: DraftSession, embed: discord.Embed, clear: bool
 ) -> None:
     if session.lot_message_id is None:
         return
@@ -685,7 +694,7 @@ async def edit_lot(
 
 
 async def _render_error(
-    fx: ErrorFx, interaction: Optional[discord.Interaction]
+    fx: ErrorFx, interaction: discord.Interaction | None
 ) -> None:
     if interaction is None or interaction.user.id != fx.user_id:
         log.warning("undeliverable ErrorFx: %s", fx.message)
@@ -694,14 +703,16 @@ async def _render_error(
 
 
 async def _render_lobby(
-    session: "DraftSession", interaction: Optional[discord.Interaction]
+    session: DraftSession,
+    state: DraftState,
+    interaction: discord.Interaction | None,
 ) -> None:
     await _edit_via_interaction_or_id(
-        session, interaction, session.lobby_message_id, lobby_embed(session.state)
+        session, interaction, session.lobby_message_id, lobby_embed(state)
     )
 
 
-async def _render_free_pick(session: "DraftSession", fx: FreePickFx) -> None:
+async def _render_free_pick(session: DraftSession, fx: FreePickFx) -> None:
     # Discord caps a message at 10 embeds AND 6000 chars across all embeds.
     # Reachable pools (≤ 5N = 50 players → ≤ 2 embeds) fit in one message;
     # the char budget guards any future config that grows the pool.
@@ -709,7 +720,10 @@ async def _render_free_pick(session: "DraftSession", fx: FreePickFx) -> None:
     batch_chars = 0
     for embed in pool_embeds(fx.pool):
         chars = len(embed.description or "") + len(embed.title or "")
-        if batch and (len(batch) == 10 or batch_chars + chars > 5500):
+        if batch and (
+            len(batch) == MAX_EMBEDS_PER_MESSAGE
+            or batch_chars + chars > EMBED_CHAR_BUDGET
+        ):
             await session.thread.send(embeds=batch)
             batch, batch_chars = [], 0
         batch.append(embed)
@@ -720,8 +734,7 @@ async def _render_free_pick(session: "DraftSession", fx: FreePickFx) -> None:
     session.pick_message_id = message.id
 
 
-async def _render_paused(session: "DraftSession") -> None:
-    state = session.state
+async def _render_paused(session: DraftSession, state: DraftState) -> None:
     if state.lot is not None:
         await edit_lot(
             session,
@@ -731,8 +744,9 @@ async def _render_paused(session: "DraftSession") -> None:
     await session.thread.send("⏸️ Draft paused — the clock stops where it stood.")
 
 
-async def _render_resumed(session: "DraftSession", fx: ResumedFx) -> None:
-    state = session.state
+async def _render_resumed(
+    session: DraftSession, state: DraftState, fx: ResumedFx
+) -> None:
     if fx.lot is not None:
         await edit_lot(session, lot_embed(fx.lot, 1 + len(state.queue)), clear=False)
         await session.thread.send("▶️ Draft resumed — clock's running.")
@@ -747,27 +761,31 @@ async def _render_resumed(session: "DraftSession", fx: ResumedFx) -> None:
         await session.thread.send("▶️ Draft resumed.")
 
 
-async def _render_complete(bot: "DraftBot", session: "DraftSession") -> None:
+async def _render_complete(
+    bot: DraftBot, session: DraftSession, state: DraftState
+) -> None:
     bot._cancel_timer(session)
     if session.board_task is not None:
         session.board_task.cancel()  # a debounced repost would land after this
     bot._delete_snapshot(session.thread_id)
     # Unconditional final board — reposted fresh so it sits at the bottom.
+    # (repost_board deliberately reads live session.state.)
     try:
         await bot.repost_board(session)
     except discord.HTTPException:
         log.exception("final board repost failed for %s", session.thread_id)
-    await session.thread.send(embed=complete_embed(session.state))
-    if session.state.config.sim == "off":
+    await session.thread.send(embed=complete_embed(state))
+    if state.config.sim == "off":
         return
     session.sim_task = bot._spawn(bot._run_sim(session))
 
 
-async def _render_cancelled(bot: "DraftBot", session: "DraftSession") -> None:
+async def _render_cancelled(
+    bot: DraftBot, session: DraftSession, state: DraftState
+) -> None:
     bot._cancel_timer(session)
     if session.board_task is not None:
         session.board_task.cancel()
-    state = session.state
     if state.lot is not None:
         await edit_lot(session, cancelled_lot_embed(state.lot), clear=True)
     if session.lobby_message_id is not None:

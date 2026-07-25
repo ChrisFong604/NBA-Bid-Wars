@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from typing import TypedDict
 
 import openai
 import pydantic
@@ -22,6 +23,30 @@ MAX_TOKENS = 16000
 # ponytail: the one blend knob — LLM's share of the final score; stats gets
 # the rest. 0.0 = pure stats, 1.0 = pure vibes.
 LLM_WEIGHT = 0.4
+
+
+class PlayerDict(TypedDict):
+    """One rostered player as passed across the ui -> sim boundary.
+
+    Structural at runtime (no validation); dataset dicts may carry extras.
+    """
+
+    slot: str
+    name: str
+    pos: str
+    ppg: float
+    rpg: float
+    apg: float
+    stars: int
+    decade: int
+    prime: str
+
+
+class TeamDict(TypedDict):
+    """One team as passed to ``run_stats``/``run_ai``."""
+
+    manager: str
+    players: list[PlayerDict]
 
 
 class LlmRanking(BaseModel):
@@ -37,16 +62,15 @@ class SimError(Exception):
 class SimResult:
     standings: tuple[tuple[str, float], ...]  # (team, score), best first
     champion: str
-    summary: str = ""  # LLM's tournament story (ai mode only)
-    blended: bool = False  # True when standings mix stats + LLM rankings
+    summary: str = ""  # LLM's tournament story — non-empty iff ai-blended
 
 
-def player_score(p: dict) -> float:
+def player_score(p: PlayerDict) -> float:
     """Era-fair player value: stars carry it, prime stats break it open."""
     return 4 * p["stars"] + 0.35 * p["ppg"] + 0.5 * p["rpg"] + 0.7 * p["apg"]
 
 
-def run_stats(teams: list[dict]) -> SimResult:
+def run_stats(teams: list[TeamDict]) -> SimResult:
     """Deterministic offline ranking — no network, no randomness.
 
     ``teams`` shape: ``[{"manager": str, "players": [{"slot", "name", "pos",
@@ -54,18 +78,17 @@ def run_stats(teams: list[dict]) -> SimResult:
     score descending, ties broken by team name for determinism.
     """
     _team_names(teams)
-    scored = sorted(
+    standings = tuple(sorted(
         (
-            (sum(player_score(p) for p in t["players"]), t["manager"])
+            (t["manager"], sum(player_score(p) for p in t["players"]))
             for t in teams
         ),
-        key=lambda pair: (-pair[0], pair[1]),
-    )
-    standings = tuple((name, score) for score, name in scored)
+        key=lambda pair: (-pair[1], pair[0]),
+    ))
     return SimResult(standings=standings, champion=standings[0][0])
 
 
-async def run_ai(teams: list[dict]) -> SimResult:
+async def run_ai(teams: list[TeamDict]) -> SimResult:
     """Stats ranking blended with an LLM's own ranking of the same teams.
 
     Each ranking converts to points (p-th of N earns N-p); final score is
@@ -115,7 +138,6 @@ async def run_ai(teams: list[dict]) -> SimResult:
         standings=tuple((name, final[name]) for name in ordered),
         champion=ordered[0],
         summary=verdict.summary,
-        blended=True,
     )
 
 
@@ -123,28 +145,18 @@ async def run_ai(teams: list[dict]) -> SimResult:
 
 
 def _parse_ranking(content: str) -> LlmRanking:
-    """Validate the model's reply, tolerating fences and surrounding prose."""
-    text = content.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-        if text.rstrip().endswith("```"):
-            text = text.rstrip()[:-3]
-        text = text.strip()
+    """Validate the model's reply, tolerating fences and surrounding prose:
+    the outermost {...} slice is the candidate JSON either way."""
+    start, end = content.find("{"), content.rfind("}")
+    if start == -1 or end <= start:
+        raise SimError("The sim returned a malformed result — try again.")
     try:
-        return LlmRanking.model_validate_json(text)
-    except pydantic.ValidationError:
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end <= start:
-            raise SimError("The sim returned a malformed result — try again.")
-        try:
-            return LlmRanking.model_validate_json(text[start : end + 1])
-        except pydantic.ValidationError as exc:
-            raise SimError(
-                "The sim returned a malformed result — try again."
-            ) from exc
+        return LlmRanking.model_validate_json(content[start : end + 1])
+    except pydantic.ValidationError as exc:
+        raise SimError("The sim returned a malformed result — try again.") from exc
 
 
-def _team_names(teams: list[dict]) -> frozenset[str]:
+def _team_names(teams: list[TeamDict]) -> frozenset[str]:
     """Validate the input shape and return the set of team (manager) names."""
     if not isinstance(teams, list) or len(teams) < 2:
         raise SimError("A tournament needs at least two teams.")
@@ -160,11 +172,11 @@ def _team_names(teams: list[dict]) -> frozenset[str]:
     return frozenset(names)
 
 
-def _total_stars(team: dict) -> int:
+def _total_stars(team: TeamDict) -> int:
     return sum(p["stars"] for p in team["players"])
 
 
-def _roster_block(team: dict) -> str:
+def _roster_block(team: TeamDict) -> str:
     lines = [f"Team {team['manager']} ({_total_stars(team)} total stars):"]
     for p in team["players"]:
         # Pre-era snapshots can carry players without a prime range.
@@ -179,7 +191,7 @@ def _roster_block(team: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_prompt(teams: list[dict]) -> str:
+def _build_prompt(teams: list[TeamDict]) -> str:
     rosters = "\n\n".join(_roster_block(t) for t in teams)
     names = ", ".join(t["manager"] for t in teams)
     return (

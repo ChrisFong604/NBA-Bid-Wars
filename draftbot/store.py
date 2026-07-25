@@ -22,11 +22,11 @@ from .models import (
     Spot,
 )
 
-
 # -------------------------------------------------------------- serialization
 
 
 def state_to_dict(state: DraftState) -> dict[str, Any]:
+    """Serialize state to plain JSON types; ``passed_ids`` frozenset becomes a sorted list."""
     d = asdict(state)
     d["passed_ids"] = sorted(state.passed_ids)  # frozenset isn't JSON
     return d
@@ -95,6 +95,7 @@ def _config(d: dict[str, Any]) -> Config:
 
 
 def state_from_dict(d: dict[str, Any]) -> DraftState:
+    """Rebuild state from JSON types; the ``passed_ids`` sorted list becomes a frozenset."""
     return DraftState(
         config=_config(d["config"]),
         commissioner_id=d["commissioner_id"],
