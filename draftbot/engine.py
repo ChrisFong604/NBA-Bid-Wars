@@ -97,24 +97,26 @@ def build_pool(
     config: Config,
     rng: random.Random,
 ) -> tuple[Player, ...]:
-    """N per natural position + ``pool_extra`` leftovers, shuffled (rule #3)."""
-    buckets = {pos: [p for p in players if p.pos == pos] for pos in SLOTS}
-    short = [pos for pos in SLOTS if len(buckets[pos]) < n_managers]
-    if short:
+    """Exactly ``5 * n_managers`` players — one per roster spot, shuffled.
+
+    Stratified best-effort: aim for ``n_managers`` per natural position; when
+    the era-filtered dataset lacks a position, the shortfall is filled with
+    random players from other positions (any player can occupy any slot,
+    rule #9). Zero leftovers: every pool player ends on a roster.
+    """
+    total = len(config.slots) * n_managers
+    if len(players) < total:
         raise ValueError(
-            f"not enough players at {', '.join(short)}: "
-            f"need {n_managers} per position"
+            f"not enough players: need {total} for {n_managers} managers, "
+            f"have {len(players)}"
         )
     chosen: list[Player] = []
     for pos in SLOTS:
-        chosen.extend(rng.sample(buckets[pos], n_managers))
+        bucket = [p for p in players if p.pos == pos]
+        chosen.extend(rng.sample(bucket, min(n_managers, len(bucket))))
     chosen_ids = {p.id for p in chosen}
-    leftovers = [p for p in players if p.pos in buckets and p.id not in chosen_ids]
-    if len(leftovers) < config.pool_extra:
-        raise ValueError(
-            f"not enough leftover players for pool_extra={config.pool_extra}"
-        )
-    chosen.extend(rng.sample(leftovers, config.pool_extra))
+    leftovers = [p for p in players if p.id not in chosen_ids]
+    chosen.extend(rng.sample(leftovers, total - len(chosen)))
     rng.shuffle(chosen)
     return tuple(chosen)
 
@@ -232,7 +234,8 @@ def _deal_lot(state: DraftState, now: float) -> Transition:
             state.config.pass_rule == "pass_once"
             and player.id in state.passed_ids
         ),
-        deadline=now + state.config.open_seconds,
+        # Flat clock (rule #5): armed once per lot; bids never extend it.
+        deadline=now + state.config.lot_seconds,
     )
     state2 = replace(state, queue=rest, lot=lot, lot_seq=seq)
     fx: list[Effect] = [
@@ -268,16 +271,12 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
         return _err(state, uid, f"Bid must beat the current ${lot.current_bid}.")
     if effective > m.budget:
         return _err(state, uid, f"You've only got ${m.budget} left.")
-    new_lot = replace(
-        lot,
-        current_bid=effective,
-        leader_id=uid,
-        deadline=ev.now + state.config.hammer_seconds,
-    )
+    # Flat clock: the deadline set at deal time stands — no re-arm on bids.
+    new_lot = replace(lot, current_bid=effective, leader_id=uid)
     state2 = _with_manager(
         replace(state, lot=new_lot), replace(m, last_action_lot=lot.seq)
     )
-    return state2, [BidPlaced(new_lot), ArmTimerFx("lot", lot.seq, new_lot.deadline)]
+    return state2, [BidPlaced(new_lot)]
 
 
 def _lot_expired(
@@ -289,7 +288,7 @@ def _lot_expired(
         or state.phase != "auction"
         or lot is None
         or ev.lot_seq != lot.seq
-        or ev.deadline != lot.deadline  # stale-timer guard: bids re-arm
+        or ev.deadline != lot.deadline  # stale guard: addtime/resume re-arm
     ):
         return state, []
     if lot.current_bid > 0:  # SOLD

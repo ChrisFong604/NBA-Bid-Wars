@@ -1,11 +1,13 @@
 """Snapshot persistence: roundtrip fidelity and atomic writes."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from draftbot import engine
 from draftbot.models import Bid, Swap, TimerExpired
-from draftbot.store import load_snapshot, save_snapshot
+from draftbot.store import load_snapshot, save_snapshot, state_to_dict
 from helpers import start_draft
 
 
@@ -45,6 +47,31 @@ def test_overwrite_leaves_no_tmp_files(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == ["snap.json"]
     _, meta = load_snapshot(path)
     assert meta == {"v": 2}
+
+
+def test_old_style_config_snapshot_loads(tmp_path):
+    """Regression: pre-flat-clock snapshots (like the live lobby snapshot on
+    the production VM) carry open_seconds/hammer_seconds/pool_extra, omit
+    lot_seconds, and store ``sim`` as a bool. The loader must drop the dead
+    keys, default lot_seconds, and coerce sim True->"ai" / False->"off"."""
+    state = rich_state()
+    payload = {"state": state_to_dict(state), "meta": {"thread_id": 3}}
+    cfg = payload["state"]["config"]
+    del cfg["lot_seconds"]
+    cfg.update(open_seconds=20, hammer_seconds=10, pool_extra=10, sim=True)
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded, meta = load_snapshot(path)
+    assert meta == {"thread_id": 3}
+    assert loaded.config.lot_seconds == 60  # default fills the missing key
+    assert loaded.config.sim == "ai"  # True -> "ai"
+    assert not hasattr(loaded.config, "pool_extra")
+    assert loaded == state  # everything else survives untouched
+    # sim False coerces to "off".
+    cfg["sim"] = False
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded2, _ = load_snapshot(path)
+    assert loaded2.config.sim == "off"
 
 
 def test_failed_save_cleans_tmp_and_preserves_old_snapshot(tmp_path):

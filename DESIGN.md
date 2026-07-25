@@ -2,8 +2,8 @@
 
 A Discord bot that runs a blind-auction NBA draft: players are revealed one at a
 time from a hidden shuffled queue, managers bid live with buttons, and when every
-roster is full an LLM simulates a tournament between the drafted teams and crowns
-a champion.
+roster is full a sim ranks the drafted teams (pure stats, optionally blended with
+an LLM ranking) and crowns a champion.
 
 **Terminology:** *managers* = the humans drafting. *players* = NBA players in the pool.
 
@@ -13,23 +13,26 @@ a champion.
 
 ### Setup
 1. `/draft create` in a channel spawns a public thread for the draft. The creator
-   is the **commissioner**. Options (all have defaults): budget `$20`, opening
-   window `20s`, hammer timer `10s`, pool surplus `+10`, max managers `10`, and
-   an **era range** in 10-year increments — anywhere from the 1960s through the
-   2020s (e.g. 2000s–2020s, or 1960s–1990s). Default is all eras. Each player
-   belongs to the decade of their prime; only players whose prime falls inside
-   the range enter the pool.
+   is the **commissioner**. Options (all have defaults): budget `$20`, lot clock
+   `60s` (flat — bids never extend it), sim mode `off`/`stats`/`ai` (default
+   `ai`), max managers `10`, and an **era range** in 10-year increments —
+   anywhere from the 1960s through the 2020s (e.g. 2000s–2020s, or
+   1960s–1990s). Default is all eras. Each player belongs to the decade of
+   their prime; only players whose prime falls inside the range enter the pool.
 2. Managers join via a Join button in the lobby message. 2–10 managers. Once the
    draft starts, **no one can join**.
-3. On `/draft start` the bot builds the pool: guaranteed **≥ N players per natural
-   position** (PG/SG/SF/PF/C), total **5N + 10**, shuffled into a hidden queue.
+3. On `/draft start` the bot builds the pool: **exactly 5N players** —
+   stratified best-effort (up to N per natural position PG/SG/SF/PF/C, any
+   shortfall filled from other positions), shuffled into a hidden queue.
+   Pool == total slots, so every pool player ends the draft on a roster.
    Managers never see the queue — only players already resolved, the one on the
    block, and the remaining-pool count.
 
 ### The auction loop
 4. The next player is revealed as a card: name, team, position, last-season
    `ppg/rpg/apg`, and a 1–5 ⭐ rating derived from those stats.
-5. **Opening window (20s):** any eligible manager may open at any integer from $1
+5. **Flat clock (default 60s):** each lot gets one countdown, armed at reveal —
+   bids never extend it. Any eligible manager may open at any integer from $1
    up to their entire remaining budget — jump openings allowed, and going all-in
    ($20 on the very first player) is legal.
 6. **No opening bid → PASSED.**
@@ -45,10 +48,10 @@ a champion.
      the draft can stall for hours (worst case is provably O(N²) reveals). The
      pass-once rule keeps the "they might come back" tension while making every
      second appearance final, which also guarantees the draft ends in at most
-     2 × (5N+10) reveals. Unlimited recycle stays available as a config flag if
+     2 × 5N reveals. Unlimited recycle stays available as a config flag if
      the group prefers it.
-7. **Bidding:** after an opening bid, a 10s hammer timer starts and resets on
-   every valid bid. When it expires, the high bidder wins.
+7. **Bidding:** all bids race the same flat clock — nothing resets it. When it
+   expires, the high bidder wins (no bid → #6).
 8. **Bid validity:**
    - Integer dollars, strictly greater than the current bid.
    - **No reserve — your money is yours to burn.** Max bid = your entire
@@ -68,7 +71,8 @@ a champion.
    Placement is fully flexible — **any player can occupy any slot** (a center can
    play point guard). `/swap` rearranges your own slots any time before the draft
    ends. Slots therefore never block a bid; they're your lineup for the sim.
-10. Budgets and rosters are **public** at all times on a pinned board.
+10. Budgets and rosters are **public** at all times on the board, which is
+    reposted at the bottom of the thread after every resolution.
 
 ### Going broke & the endgame
 11. **Broke = spectator.** At $0 with empty slots you can't bid (minimum bid is
@@ -86,22 +90,23 @@ a champion.
     hoarding, so leftover budget needs no other value.
 14. **Auto-fill:** once nobody is active, every broke/autopilot team's empty
     slots are filled one at a time with random players from the remaining
-    pool, free. The pool can never run dry — it starts 10 players deeper than
-    total slots and only shrinks when a slot fills.
+    pool, free. The pool is exactly total slots (5N), so auto-fill drains it
+    to zero — no leftovers.
 15. The draft ends when every team has 5 players. LAST CALL (#6) bounds the
-    auction phase at 2 × (5N+10) reveals, so no stall is possible.
+    auction phase at 2 × 5N reveals, so no stall is possible.
 16. **AFK / leavers:** a manager with no interaction for 10 consecutive lots is
     flagged **autopilot** — their team never bids and fills at auto-fill.
     Someone who leaves goes autopilot; rejoining reclaims the team. The
     commissioner can `/draft kick @user [replace:@user2]` — a replacement
     inherits roster and budget verbatim.
 
-### The winner — LLM tournament sim
-17. When the draft completes, the bot sends every roster (with per-player stats
-    and slot assignments) to Claude, which simulates a
-    tournament: round-robin for ≤ 6 teams, seeded single-elimination bracket
-    above that. Each game gets a 2–3 sentence recap posted as an embed,
-    culminating in a champion. Bragging rights resolved by silicon.
+### The winner — tournament sim
+17. When the draft completes (sim mode ≠ `off`), the bot ranks every roster by
+    prime stats; in `ai` mode one LLM call adds a second ranking blended
+    60/40 (stats/LLM) into the final standings, plus a short "how it played
+    out" summary. One standings embed, one champion. `stats` mode is
+    deterministic and needs no API key; `ai` without a key falls back to
+    stats with a note.
 
 ### Commissioner controls
 18. `/draft pause`, `/draft resume`, `/draft addtime <s>`, `/draft kick`,
@@ -115,13 +120,14 @@ a champion.
 Findings from the UX research, discord.py-flavored:
 
 - **One public thread per draft** (`autoArchiveDuration=1440`). The thread's
-  scrollback *is* the auction log. Pinned board message + one new message per
-  lot; closed lots become green (✅ SOLD $7 — Jalen Suggs) / grey (➖ PASSED)
+  scrollback *is* the auction log. Board message + one new message per lot;
+  closed lots become green (✅ SOLD $7 — Jalen Suggs) / grey (➖ PASSED)
   tombstones.
 - **Lot card:** embed with author line `Lot #14 · 23 players left in the pool`,
   title `🏀 Jalen Suggs — PG`, fields for Current Bid / Leader / Status, and a
-  footer warning: *"bid up to your full remaining budget — hit $0 and you're
-  done bidding."* LAST CALL players get the 🔔 badge and a warning line.
+  footer warning: *"flat clock — bids never add time · bid up to your full
+  remaining budget; hit $0 and you're done bidding."* LAST CALL players get
+  the 🔔 badge and a warning line.
 - **Countdown with zero edit spam:** deadlines render as Discord relative
   timestamps (`discord.utils.format_dt(dt, style='R')`) — the client ticks them
   live. The embed is only edited when a bid lands (which changes price/leader
@@ -143,10 +149,11 @@ Findings from the UX research, discord.py-flavored:
   `interaction.response.edit_message()` for bid acks (atomically acks + edits,
   free of channel rate-limit buckets), `send_modal()` for Custom (must be the
   *first* response — can't defer first), ephemeral replies for errors.
-- **Board:** one pinned embed, one inline field per manager
-  (`🟢 Chris — $9 left`, or `💸 BROKE` at $0, plus roster lines), edited with a 2s
-  trailing debounce and coalesced across rapid sales. Sale footers mirror the
-  winner's new budget so the info is visible without scrolling to the pin.
+- **Board:** one embed, one inline field per manager
+  (`🟢 Chris — $9 left`, or `💸 BROKE` at $0, plus roster lines). After every
+  resolution it's **reposted fresh at the bottom of the thread** (the old one
+  is deleted — nobody scrolls up), with a 2s trailing debounce coalescing
+  rapid sales into one repost.
 - **Close sequencing:** terminal lot edit → board edit → ~2s beat → next lot
   send, to stay friendly with the per-channel rate bucket.
 - **Free-pick phase UX:** the remaining pool is posted as a reveal embed, and
@@ -183,11 +190,13 @@ tests/
 - **Concurrency:** one `asyncio.Lock` per draft. Every transition — button
   click, modal submit, timer fire, commissioner command — acquires it, applies
   the event, commits, then does Discord I/O outside the critical section.
-- **Timers:** one `asyncio` task per lot. `deadline` (epoch) lives in state and
-  is the source of truth; a new bid cancels the task and re-arms. When a timer
-  fires it re-checks, under the lock, that its `lot_seq` and deadline still
-  match state before hammering — this closes the fired-while-a-bid-was-landing
-  race (the "close-cycle token" pattern from prior art).
+- **Timers:** one `asyncio` task per lot, armed once at reveal for the flat
+  `lot_seconds` clock — bids never touch it. `deadline` (epoch) lives in state
+  and is the source of truth (only pause/resume and `/draft addtime` shift
+  it, re-arming the task). When a timer fires it re-checks, under the lock,
+  that its `lot_seq` and deadline still match state before closing the lot —
+  this closes the fired-while-addtime-was-landing race (the "close-cycle
+  token" pattern from prior art).
 - **Persistence:** in-memory state is authoritative; one JSON file per draft
   (`snapshots/<thread_id>.json`), written atomically (`tmp` + `os.replace`)
   **only at lot boundaries** (created/started/sold/passed/swap/complete),
@@ -237,25 +246,25 @@ tests/
 
 ---
 
-## 5. LLM Tournament Sim (`sim.py`)
+## 5. Tournament Sim (`sim.py`)
 
-- Python `openai` SDK pointed at an OpenAI-compatible router (`LLM_BASE_URL`,
-  default OpenRouter), model from `SIM_MODEL` (default
-  **`anthropic/claude-sonnet-4.5`**), `LLM_API_KEY` from env (checked before
-  the sim runs when enabled).
-- One request per tournament: all rosters with slot assignments, per-player
-  prime stats, prime years, and era, plus the format (round-robin ≤ 6 teams,
-  seeded knockout above). The prompt states that **every player competes at
-  their prime** — 1991 Jordan takes the floor against 2016 Curry — and invites
-  the model to play the cross-era style clashes (pace, spacing, physicality)
-  for flavor in the recaps.
-- **Schema-guided output**: the prompt embeds the Pydantic `Tournament` JSON
-  schema (`{games: [{round, home, away, home_score, away_score, recap}],
-  champion, mvp, summary}`) and demands a bare JSON object; the reply is
-  validated with Pydantic, tolerating markdown fences and surrounding prose.
-- The bot posts one embed per game with a dramatic beat between them, then a
-  🏆 champion card. On API failure: report the error and offer a retry button —
-  never fake a result.
+- Three modes on `Config.sim`: `off`, `stats`, `ai`. `ai` without
+  `LLM_API_KEY` downgrades to `stats` with a note — the sim never blocks on
+  a missing key.
+- **`stats`** — deterministic, no network: rank teams by summed player score
+  `4*stars + 0.35*ppg + 0.5*rpg + 0.7*apg`, name tie-break.
+- **`ai`** — the stats ranking plus one LLM call: Python `openai` SDK pointed
+  at an OpenAI-compatible router (`LLM_BASE_URL`, default OpenRouter), model
+  from `SIM_MODEL` (default **`anthropic/claude-sonnet-4.5`**), `LLM_API_KEY`
+  from env. One request with all rosters (slot assignments, prime
+  stats/years/era); the prompt states **primes face primes** — 1991 Jordan vs
+  2016 Curry — and invites cross-era style clashes for flavor in the summary.
+  The reply is a permutation-validated Pydantic `LlmRanking{ranking, summary}`
+  (fence/prose-tolerant). Final score = `0.6*stats + 0.4*LLM` rank points;
+  ties resolve in stats order.
+- The bot posts one 🏆 standings embed (champion title, ranked scores, the
+  LLM's summary when present). On API failure: report the error and point at
+  `/simulate` to retry — never fake a result.
 
 ---
 
@@ -264,12 +273,12 @@ tests/
 ```python
 DEFAULTS = dict(
     budget=20, roster_size=5, slots=["PG", "SG", "SF", "PF", "C"],
-    open_seconds=20, hammer_seconds=10, pool_extra=10,
+    lot_seconds=60,          # flat clock — bids never extend it
     quick_bids=[1, 2, 5], max_managers=10,
     pass_rule="pass_once",   # or "recycle_forever" if the group insists
     placement="any",
     afk_lots=10, free_pick_seconds=60,
-    sim=True,
+    sim="ai",                # "off" | "stats" | "ai"
 )
 ```
 
@@ -283,7 +292,7 @@ honor it.
 | Phase | Deliverable (independently demoable) | Effort |
 |---|---|---|
 | **1. Pure engine** | `engine.py` + tests + 1,000-draft simulation test green; CLI script plays a full draft with scripted bids against a 30-player stub | 30% |
-| **2. Discord wiring** | Thread + lobby, lot embeds with bid buttons + custom modal, `<t:R>` countdowns, sold/passed tombstones, pinned board, `/swap`, fast mode. Demo: real 3-human draft on a test server | 35% |
+| **2. Discord wiring** | Thread + lobby, lot embeds with bid buttons + custom modal, `<t:R>` countdowns, sold/passed tombstones, reposted board, `/swap`, fast mode. Demo: real 3-human draft on a test server | 35% |
 | **3. Persistence & recovery** | Atomic snapshots, boot-time resume, restart-current-lot. Demo: `kill -9` mid-bid, restart, draft continues | 10% |
 | **4. Real dataset** | `build_dataset.py` → `players.json` (~200 players). Demo: draft with real names | 10% |
 | **5. LLM sim** | `sim.py` + game recap embeds + champion card. Demo: full draft → simulated tournament | 10% |

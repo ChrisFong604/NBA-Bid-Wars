@@ -64,7 +64,6 @@ SNAPSHOT_DIR = Path(
     or Path(__file__).resolve().parent.parent / "snapshots"
 )
 BOARD_DEBOUNCE_SECONDS = 2.0
-SIM_GAME_BEAT_SECONDS = 1.5
 
 # Snapshot on lot boundaries / phase changes / roster changes — never on a
 # bare BidPlaced. LobbyFx/BoardFx are included so lobby membership and swaps
@@ -260,7 +259,7 @@ class DraftBot(discord.Client):
     # --------------------------------------------------------------- board
 
     def _schedule_board(self, session: DraftSession) -> None:
-        """Trailing 2s debounce; rapid sales coalesce into one edit reading
+        """Trailing 2s debounce; rapid sales coalesce into one repost reading
         the latest state at fire time."""
         if session.board_task is not None and not session.board_task.done():
             return
@@ -268,14 +267,27 @@ class DraftBot(discord.Client):
 
     async def _board_later(self, session: DraftSession) -> None:
         await asyncio.sleep(BOARD_DEBOUNCE_SECONDS)
-        if session.board_message_id is None:
-            return
         try:
-            await session.thread.get_partial_message(
-                session.board_message_id
-            ).edit(embed=ui.board_embed(session.state))
+            await self.repost_board(session)
         except discord.HTTPException:
-            log.exception("board edit failed for %s", session.thread_id)
+            log.exception("board repost failed for %s", session.thread_id)
+
+    async def repost_board(self, session: DraftSession) -> None:
+        """Post a fresh board at the bottom of the thread (nobody scrolls up)
+        and drop the previous one; NotFound just means it's already gone."""
+        old_id = session.board_message_id
+        message = await session.thread.send(embed=ui.board_embed(session.state))
+        session.board_message_id = message.id
+        if old_id is not None:
+            try:
+                await session.thread.get_partial_message(old_id).delete()
+            except discord.NotFound:
+                pass
+            except discord.HTTPException:
+                log.exception("old board delete failed for %s", session.thread_id)
+        if session.state.phase not in ("complete", "cancelled"):
+            async with session.lock:
+                self._save(session)  # board_message_id changed → refresh meta
 
     # ------------------------------------------------------------ renderer
 
@@ -290,9 +302,17 @@ class DraftBot(discord.Client):
     # ----------------------------------------------------------------- sim
 
     async def _run_sim(self, session: DraftSession) -> None:
+        mode = session.state.config.sim
+        note = ""
+        if mode == "ai" and not os.environ.get("LLM_API_KEY"):
+            mode, note = "stats", "no LLM key — stats-only ranking"
         await session.thread.send("🤖 Simulating the tournament…")
         try:
-            tournament = await sim.run_tournament(ui.teams_for_sim(session.state))
+            teams = ui.teams_for_sim(session.state)
+            if mode == "ai":
+                result = await sim.run_ai(teams)
+            else:
+                result = sim.run_stats(teams)
         except sim.SimError as exc:
             await session.thread.send(f"⚠️ {exc} Run /simulate to retry.")
             return
@@ -302,10 +322,9 @@ class DraftBot(discord.Client):
                 "⚠️ The tournament sim crashed — run /simulate to retry."
             )
             return
-        for game in tournament.games:
-            await session.thread.send(embed=ui.game_embed(game))
-            await asyncio.sleep(SIM_GAME_BEAT_SECONDS)
-        await session.thread.send(embed=ui.champion_embed(tournament))
+        await session.thread.send(
+            content=note or None, embed=ui.sim_results_embed(result)
+        )
 
     # ---------------------------------------------------- component entry
 
@@ -540,21 +559,27 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
     @draft.command(name="create", description="Open a draft lobby in a new thread")
     @app_commands.describe(
         budget="Starting budget per manager (default $20)",
-        open_seconds="Opening window per player (default 20s)",
-        hammer_seconds="Hammer timer after a bid (default 10s)",
+        clock="Seconds each player stays on the block — flat, bids don't extend it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
-        sim="Simulate a tournament between the teams afterwards (default on)",
+        sim="Post-draft tournament sim mode (default AI + stats)",
     )
-    @app_commands.choices(era_from=era_choices, era_to=era_choices)
+    @app_commands.choices(
+        era_from=era_choices,
+        era_to=era_choices,
+        sim=[
+            app_commands.Choice(name="Off", value="off"),
+            app_commands.Choice(name="Stats only", value="stats"),
+            app_commands.Choice(name="AI + stats", value="ai"),
+        ],
+    )
     async def draft_create(
         interaction: discord.Interaction,
         budget: app_commands.Range[int, 1, 1000] = 20,
-        open_seconds: app_commands.Range[int, 5, 600] = 20,
-        hammer_seconds: app_commands.Range[int, 3, 120] = 10,
+        clock: app_commands.Range[int, 15, 300] = 60,
         era_from: int = 1960,
         era_to: int = 2020,
-        sim: bool = True,  # shadows the sim module only inside this closure
+        sim: str = "ai",  # shadows the sim module only inside this closure
     ) -> None:
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
@@ -585,8 +610,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
             return
         config = Config(
             budget=budget,
-            open_seconds=open_seconds,
-            hammer_seconds=hammer_seconds,
+            lot_seconds=clock,
             era_start=era_from,
             era_end=era_to,
             sim=sim,
@@ -648,10 +672,6 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         )
         board = await session.thread.send(embed=ui.board_embed(session.state))
         session.board_message_id = board.id
-        try:
-            await board.pin()
-        except discord.HTTPException:
-            log.warning("couldn't pin the board (need Manage Messages)")
         async with session.lock:
             bot._save(session)
         await bot.render(session, effects)
@@ -863,9 +883,9 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
                 interaction, "The sim runs after the draft completes."
             )
             return
-        if not os.environ.get("LLM_API_KEY"):
+        if state.config.sim == "off":
             await _reply_ephemeral(
-                interaction, "Set LLM_API_KEY to run the tournament sim."
+                interaction, "The tournament sim is off for this draft."
             )
             return
         if session.sim_task is not None and not session.sim_task.done():

@@ -145,13 +145,13 @@ def test_start_deals_first_lot():
     state, fx, _ = start_draft(3)
     assert state.phase == "auction"
     assert state.lot is not None and state.lot.seq == 1
-    pool_size = 5 * 3 + CFG.pool_extra
+    pool_size = 5 * 3  # exactly 5N, zero leftovers
     assert len(state.queue) == pool_size - 1
     opened = fx_of(fx, LotOpened)[0]
     assert opened.pool_left == pool_size
     timer = fx_of(fx, ArmTimerFx)[0]
     assert timer.kind == "lot" and timer.lot_seq == 1
-    assert timer.deadline == 1000.0 + CFG.open_seconds
+    assert timer.deadline == 1000.0 + CFG.lot_seconds
     assert state.lot.current_bid == 0 and state.lot.leader_id is None
     assert not state.lot.last_call
 
@@ -159,8 +159,18 @@ def test_start_deals_first_lot():
 # --------------------------------------------------------------- build_pool
 
 
-def test_build_pool_raises_on_short_position_bucket():
+def test_build_pool_short_position_fills_from_other_positions():
+    """Stratified best-effort: a short position bucket no longer raises —
+    the shortfall comes from other positions (any player fits any slot)."""
     players = [p for p in make_players(3) if p.pos != "C"] + [px("c1", "C")]
+    pool = engine.build_pool(players, 2, CFG, random.Random(0))
+    assert len(pool) == 5 * 2
+    assert len({p.id for p in pool}) == len(pool)
+    assert sum(1 for p in pool if p.pos == "C") == 1  # only C available
+
+
+def test_build_pool_raises_when_era_pool_smaller_than_5n():
+    players = make_players(3)[:9]  # 9 < 5 * 2
     with pytest.raises(ValueError):
         engine.build_pool(players, 2, CFG, random.Random(0))
 
@@ -168,24 +178,44 @@ def test_build_pool_raises_on_short_position_bucket():
 def test_build_pool_composition():
     rng = random.Random(5)
     pool = engine.build_pool(make_players(10), 4, CFG, rng)
-    assert len(pool) == 5 * 4 + CFG.pool_extra
+    assert len(pool) == 5 * 4  # exactly 5N, zero leftovers
     assert len({p.id for p in pool}) == len(pool)
-    for pos in CFG.slots:
-        assert sum(1 for p in pool if p.pos == pos) >= 4
+    for pos in CFG.slots:  # deep buckets -> exactly N per position
+        assert sum(1 for p in pool if p.pos == pos) == 4
 
 
 # ------------------------------------------------------------------ bidding
 
 
-def test_all_in_bid_legal():
+def test_all_in_bid_legal_and_does_not_move_deadline():
     state, _, rng = start_draft(2)
+    deadline0 = state.lot.deadline
     state2, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=CFG.budget), rng)
     placed = fx_of(fx, BidPlaced)[0]
     assert placed.lot.current_bid == CFG.budget and placed.lot.leader_id == 2
-    assert placed.lot.deadline == 1001.0 + CFG.hammer_seconds
+    # Flat clock: the bid must NOT move the deadline, and no timer re-arms.
+    assert placed.lot.deadline == deadline0
+    assert state2.lot.deadline == deadline0
+    assert fx_of(fx, ArmTimerFx) == []
     assert state2.manager(2).last_action_lot == 1
-    timer = fx_of(fx, ArmTimerFx)[0]
-    assert timer == ArmTimerFx("lot", 1, placed.lot.deadline)
+
+
+def test_flat_clock_lot_sells_at_original_deadline():
+    """Bids — even last-second ones — never extend the flat lot clock; the
+    lot sells to the leader exactly at the deal-time deadline."""
+    state, _, rng = start_draft(2)
+    deadline = state.lot.deadline
+    assert deadline == 1000.0 + CFG.lot_seconds
+    state, _ = engine.apply(state, Bid(2, 1, 1001.0, amount=2), rng)
+    assert state.lot.deadline == deadline
+    state, _ = engine.apply(state, Bid(1, 1, deadline - 0.5, amount=3), rng)
+    assert state.lot.deadline == deadline  # last-second bid: still flat
+    state2, fx = engine.apply(
+        state, TimerExpired("lot", 1, deadline, deadline), rng
+    )
+    sold = fx_of(fx, SoldFx)[0]
+    assert sold.manager_id == 1 and sold.price == 3
+    assert state2.manager(1).budget == CFG.budget - 3
 
 
 def test_bid_over_budget_rejected():
@@ -253,7 +283,7 @@ def test_stale_deadline_timer_ignored():
     assert state2 is state and fx == []
 
 
-def test_opening_window_pass_recycles_to_back():
+def test_no_bid_at_flat_deadline_recycles_to_back():
     state, _, rng = start_draft(2)
     first = state.lot.player
     deadline = state.lot.deadline
@@ -506,19 +536,19 @@ def test_swap_invalid_slots_rejected():
 
 def test_pause_resume_deadline_math_auction():
     state, _, rng = start_draft(2)
-    assert state.lot.deadline == 1020.0
+    assert state.lot.deadline == 1060.0  # 1000 + lot_seconds
     state, fx = engine.apply(state, Pause(1, 1010.0), rng)
-    assert state.paused and state.pause_remaining == 10.0
+    assert state.paused and state.pause_remaining == 50.0
     assert fx == [CancelTimerFx(), PausedFx()]
     # Paused: bids rejected, timers ignored.
     _, fx = engine.apply(state, Bid(2, 1, 1011.0, amount=3), rng)
     assert isinstance(fx[0], ErrorFx)
-    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1020.0, 1020.0), rng)
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1060.0, 1060.0), rng)
     assert state2 is state and fx == []
     state, fx = engine.apply(state, Resume(1, 2000.0), rng)
     assert not state.paused and state.pause_remaining == 0.0
-    assert state.lot.deadline == 2010.0
-    assert fx == [ResumedFx(state.lot), ArmTimerFx("lot", 1, 2010.0)]
+    assert state.lot.deadline == 2050.0  # pause/resume DOES shift the clock
+    assert fx == [ResumedFx(state.lot), ArmTimerFx("lot", 1, 2050.0)]
 
 
 def test_pause_resume_deadline_math_free_pick():
@@ -623,7 +653,7 @@ def test_redeal_deals_same_player_as_fresh_lot():
     assert state2.lot.seq == 4 and state2.lot_seq == 4
     assert state2.lot.player == player
     assert state2.lot.current_bid == 0 and state2.lot.leader_id is None
-    assert state2.lot.deadline == 3000.0 + CFG.open_seconds
+    assert state2.lot.deadline == 3000.0 + CFG.lot_seconds
     assert state2.queue == others
     opened = fx_of(fx, LotOpened)[0]
     assert opened.pool_left == 5

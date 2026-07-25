@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from typing import Any
 
 from .models import (
@@ -78,11 +78,20 @@ def _log_entry(d: dict[str, Any]) -> LogEntry:
     )
 
 
+_CONFIG_FIELDS = frozenset(f.name for f in fields(Config))
+
+
 def _config(d: dict[str, Any]) -> Config:
-    # Pre-era snapshots omit era_start/era_end; defaults (1960/2020) apply.
-    return Config(
-        **{**d, "slots": tuple(d["slots"]), "quick_bids": tuple(d["quick_bids"])}
-    )
+    # Old snapshots need shimming: pre-era ones omit era_start/era_end
+    # (defaults apply); pre-flat-clock ones carry retired keys
+    # (open_seconds/hammer_seconds/pool_extra — dropped), omit lot_seconds
+    # (default applies), and store ``sim`` as a bool (True->"ai", False->"off").
+    data = {k: v for k, v in d.items() if k in _CONFIG_FIELDS}
+    if isinstance(data.get("sim"), bool):
+        data["sim"] = "ai" if data["sim"] else "off"
+    data["slots"] = tuple(d["slots"])
+    data["quick_bids"] = tuple(d["quick_bids"])
+    return Config(**data)
 
 
 def state_from_dict(d: dict[str, Any]) -> DraftState:

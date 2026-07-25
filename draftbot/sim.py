@@ -1,54 +1,78 @@
-"""Post-draft LLM tournament simulation (DESIGN.md section 5).
+"""Post-draft simulation (DESIGN.md section 5).
 
-One request to an OpenAI-compatible chat endpoint — OpenRouter by default,
-any router via ``LLM_BASE_URL``/``LLM_API_KEY``, model picked by ``SIM_MODEL``
-— with every roster; the prompt embeds the ``Tournament`` JSON schema and the
-reply is validated against it. Format is decided here in Python — round-robin
-for small fields, a stars-seeded knockout bracket above that — and the model
-is instructed to narrate results consistent with it.
+Two modes. ``stats``: no network — every player scores
+``4*stars + 0.35*ppg + 0.5*rpg + 0.7*apg`` (era-relative stars primary, prime
+stats secondary), a team is the sum of its players, best total wins. ``ai``:
+the stats ranking PLUS one request to an OpenAI-compatible chat endpoint —
+OpenRouter by default, any router via ``LLM_BASE_URL``/``LLM_API_KEY``, model
+picked by ``SIM_MODEL`` — which returns its own ranking of the teams and a
+short summary; final standings blend the two rankings, stats-heavy.
 """
 from __future__ import annotations
 
-import itertools
 import json
 import os
+from dataclasses import dataclass
 
 import openai
 import pydantic
 from pydantic import BaseModel
 
 MAX_TOKENS = 16000
-ROUND_ROBIN_MAX_TEAMS = 6
+# ponytail: the one blend knob — LLM's share of the final score; stats gets
+# the rest. 0.0 = pure stats, 1.0 = pure vibes.
+LLM_WEIGHT = 0.4
 
 
-class Game(BaseModel):
-    round: str
-    home: str
-    away: str
-    home_score: int
-    away_score: int
-    recap: str
-
-
-class Tournament(BaseModel):
-    games: list[Game]
-    champion: str
-    mvp: str
-    summary: str
+class LlmRanking(BaseModel):
+    ranking: list[str]  # every team name exactly once, champion first
+    summary: str  # 2-4 sentences on how the tournament played out
 
 
 class SimError(Exception):
     """Simulation failed — report to the channel and offer a retry."""
 
 
-async def run_tournament(teams: list[dict]) -> Tournament:
-    """Simulate a tournament between the drafted teams via an LLM.
+@dataclass(frozen=True)
+class SimResult:
+    standings: tuple[tuple[str, float], ...]  # (team, score), best first
+    champion: str
+    summary: str = ""  # LLM's tournament story (ai mode only)
+    blended: bool = False  # True when standings mix stats + LLM rankings
+
+
+def player_score(p: dict) -> float:
+    """Era-fair player value: stars carry it, prime stats break it open."""
+    return 4 * p["stars"] + 0.35 * p["ppg"] + 0.5 * p["rpg"] + 0.7 * p["apg"]
+
+
+def run_stats(teams: list[dict]) -> SimResult:
+    """Deterministic offline ranking — no network, no randomness.
 
     ``teams`` shape: ``[{"manager": str, "players": [{"slot", "name", "pos",
-    "ppg", "rpg", "apg", "stars"}, ...]}, ...]``. Raises ``SimError`` on bad
-    input, API failure, or a malformed/inconsistent result.
+    "ppg", "rpg", "apg", "stars"}, ...]}, ...]``. Standings sort by team
+    score descending, ties broken by team name for determinism.
     """
-    names = _team_names(teams)
+    _team_names(teams)
+    scored = sorted(
+        (
+            (sum(player_score(p) for p in t["players"]), t["manager"])
+            for t in teams
+        ),
+        key=lambda pair: (-pair[0], pair[1]),
+    )
+    standings = tuple((name, score) for score, name in scored)
+    return SimResult(standings=standings, champion=standings[0][0])
+
+
+async def run_ai(teams: list[dict]) -> SimResult:
+    """Stats ranking blended with an LLM's own ranking of the same teams.
+
+    Each ranking converts to points (p-th of N earns N-p); final score is
+    ``(1-LLM_WEIGHT)*stats + LLM_WEIGHT*llm``, ties broken by stats order.
+    Raises ``SimError`` on bad input, API failure, or a malformed reply.
+    """
+    stats = run_stats(teams)
     prompt = _build_prompt(teams)
     model = os.environ.get("SIM_MODEL", "anthropic/claude-sonnet-4.5")
     try:
@@ -68,15 +92,37 @@ async def run_tournament(teams: list[dict]) -> Tournament:
     content = response.choices[0].message.content
     if not content:
         raise SimError("The sim returned no usable result — try again.")
-    tournament = _parse_tournament(content)
-    _validate(tournament, names)
-    return tournament
+    verdict = _parse_ranking(content)
+
+    stats_order = [name for name, _ in stats.standings]
+    if sorted(verdict.ranking) != sorted(stats_order):
+        raise SimError(
+            "The sim's ranking isn't a permutation of the team names — try again."
+        )
+    n = len(stats_order)
+    stats_pts = {name: n - rank for rank, name in enumerate(stats_order, 1)}
+    llm_pts = {name: n - rank for rank, name in enumerate(verdict.ranking, 1)}
+    final = {
+        # round() so equal blends compare equal despite float noise
+        name: round(
+            (1 - LLM_WEIGHT) * stats_pts[name] + LLM_WEIGHT * llm_pts[name], 9
+        )
+        for name in stats_order
+    }
+    # stable sort over stats_order = ties broken by stats order
+    ordered = sorted(stats_order, key=lambda name: -final[name])
+    return SimResult(
+        standings=tuple((name, final[name]) for name in ordered),
+        champion=ordered[0],
+        summary=verdict.summary,
+        blended=True,
+    )
 
 
 # ------------------------------------------------------------------ helpers
 
 
-def _parse_tournament(content: str) -> Tournament:
+def _parse_ranking(content: str) -> LlmRanking:
     """Validate the model's reply, tolerating fences and surrounding prose."""
     text = content.strip()
     if text.startswith("```"):
@@ -85,13 +131,13 @@ def _parse_tournament(content: str) -> Tournament:
             text = text.rstrip()[:-3]
         text = text.strip()
     try:
-        return Tournament.model_validate_json(text)
+        return LlmRanking.model_validate_json(text)
     except pydantic.ValidationError:
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:
             raise SimError("The sim returned a malformed result — try again.")
         try:
-            return Tournament.model_validate_json(text[start : end + 1])
+            return LlmRanking.model_validate_json(text[start : end + 1])
         except pydantic.ValidationError as exc:
             raise SimError(
                 "The sim returned a malformed result — try again."
@@ -133,102 +179,35 @@ def _roster_block(team: dict) -> str:
     return "\n".join(lines)
 
 
-def _round_robin_section(teams: list[dict]) -> str:
-    names = [t["manager"] for t in teams]
-    pairings = "\n".join(f"- {a} vs {b}" for a, b in itertools.combinations(names, 2))
-    return (
-        "FORMAT: round-robin. Every team plays every other team exactly once.\n"
-        "Required matchups (play each exactly once, in any order):\n"
-        f"{pairings}\n"
-        "The champion is the team with the best win-loss record; break ties on\n"
-        "total point differential. Keep every game score consistent with the\n"
-        "final standings and the champion you crown."
-    )
-
-
-def _bracket_section(teams: list[dict]) -> str:
-    seeded = sorted(teams, key=lambda t: (-_total_stars(t), t["manager"]))
-    seed_lines = "\n".join(
-        f"- seed {i}: {t['manager']} ({_total_stars(t)} total stars)"
-        for i, t in enumerate(seeded, 1)
-    )
-    size = 1
-    while size < len(seeded):
-        size *= 2
-    round_one: list[str] = []
-    for hi in range(1, size // 2 + 1):
-        lo = size - hi + 1
-        if lo <= len(seeded):
-            round_one.append(
-                f"- (seed {hi}) {seeded[hi - 1]['manager']} vs "
-                f"(seed {lo}) {seeded[lo - 1]['manager']}"
-            )
-        else:
-            round_one.append(
-                f"- (seed {hi}) {seeded[hi - 1]['manager']} — bye, advances automatically"
-            )
-    return (
-        "FORMAT: single-elimination bracket, seeded by total roster stars.\n"
-        f"Seeding:\n{seed_lines}\n"
-        "First-round matchups (byes advance without playing):\n"
-        + "\n".join(round_one)
-        + "\nWinners advance until one champion remains. Include every game\n"
-        "actually played, and label each game's round (e.g. Quarterfinal,\n"
-        "Semifinal, Final)."
-    )
-
-
 def _build_prompt(teams: list[dict]) -> str:
     rosters = "\n\n".join(_roster_block(t) for t in teams)
-    if len(teams) <= ROUND_ROBIN_MAX_TEAMS:
-        format_section = _round_robin_section(teams)
-    else:
-        format_section = _bracket_section(teams)
+    names = ", ".join(t["manager"] for t in teams)
     return (
         "You are simulating a post-draft NBA tournament between fantasy teams\n"
         "assembled in a blind-auction draft. Team names are the manager names\n"
-        "given below — use them exactly in the home, away, and champion fields.\n"
+        "given below — use them exactly, spelled exactly, in the ranking.\n"
         "\n"
         "Rosters can span decades, and every player competes AT THEIR PRIME:\n"
         "primes face primes across eras — 1991 Jordan takes the floor against\n"
         "2016 Curry. Each player's stats are prime-years numbers from their\n"
-        "own era; never age a player up or down.\n"
+        "own era; never age a player up or down. When rosters mix eras, weigh\n"
+        "the style clashes — pace, spacing, hand-checking, three-point volume\n"
+        "— as prime meets prime across decades.\n"
         "\n"
         "Players are listed by lineup slot. A player's natural position may\n"
         "differ from the slot they occupy — a center running point guard is\n"
-        "legal and should flavor the recaps.\n"
+        "legal and should factor into how their team actually plays.\n"
         "\n"
         f"TEAMS\n{rosters}\n"
         "\n"
-        f"{format_section}\n"
-        "\n"
-        "RULES\n"
-        "- Use realistic NBA final scores (roughly 85-135 per team, no ties).\n"
-        "- Write a vivid 2-3 sentence recap for every game that references the\n"
-        "  actual players on these rosters by name — big performances, clutch\n"
-        "  shots, out-of-position heroics or disasters.\n"
-        "- When rosters mix eras, play up the style clashes in the recaps —\n"
-        "  pace, spacing, hand-checking, three-point volume — as prime meets\n"
-        "  prime across decades.\n"
-        "- Name one tournament MVP: an individual player, not a manager.\n"
-        "- End with a short, punchy 1-2 sentence summary of the tournament.\n"
+        "Play the whole tournament out, then respond with:\n"
+        f"- ranking: every team ({names}) exactly once, champion first,\n"
+        "  last place last.\n"
+        "- summary: a brief 2-4 sentence story of how the tournament played\n"
+        "  out — the champion's run, key upsets, era style clashes.\n"
         "\n"
         "OUTPUT\n"
         "Respond with ONLY a single JSON object matching this JSON schema.\n"
         "No markdown fences, no prose before or after the JSON object.\n"
-        f"{json.dumps(Tournament.model_json_schema())}"
+        f"{json.dumps(LlmRanking.model_json_schema())}"
     )
-
-
-def _validate(tournament: Tournament, names: frozenset[str]) -> None:
-    if tournament.champion not in names:
-        raise SimError(
-            f"The sim crowned an unknown champion {tournament.champion!r} — try again."
-        )
-    for game in tournament.games:
-        for side in (game.home, game.away):
-            if side not in names:
-                raise SimError(
-                    f"The sim invented a team {side!r} in game "
-                    f"{game.round!r} — try again."
-                )

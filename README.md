@@ -5,21 +5,23 @@ revealed one at a time from a hidden shuffled queue, managers bid live with
 buttons, and every roster fills to five. The pool can span any run of eras
 from the 1960s through the 2020s — every player is anchored to the decade of
 their prime, and the commissioner picks the era range at creation. When the
-draft completes, an LLM of your choice (via OpenRouter or any OpenAI-compatible
-router) simulates a tournament between the drafted teams —
-primes face primes across eras (1991 Jordan vs 2016 Curry) — and crowns a
-champion. State is snapshotted atomically to disk, so the bot survives a
+draft completes, a tournament sim ranks the teams — pure stats, or stats
+blended with an LLM ranking (via OpenRouter or any OpenAI-compatible router)
+where primes face primes across eras (1991 Jordan vs 2016 Curry) — and crowns
+a champion. State is snapshotted atomically to disk, so the bot survives a
 mid-auction restart.
 
 **The rules in brief:** everyone starts with the same budget (default $20).
-Each revealed player gets a 20s opening window; the first bid starts a 10s
-hammer timer that resets on every raise. No bid means the player is recycled
-once — on their second appearance (🔔 LAST CALL) they sell or get
-force-assigned at $1. Go broke and you're a spectator whose empty slots fill
-for free at the end; outlast everyone else with money and you get free picks
-from the fully revealed pool. Any player can occupy any lineup slot
-(`/swap` rearranges yours), and rosters/budgets are always public on the
-pinned board.
+Each revealed player stays on the block for one flat clock (default 60s) —
+bids never extend it; the high bid when it expires wins. No bid means the
+player is recycled once — on their second appearance (🔔 LAST CALL) they sell
+or get force-assigned at $1. The pool is exactly five players per manager, so
+every player ends up on a roster — zero leftovers. Go broke and you're a
+spectator whose empty slots fill for free at the end; outlast everyone else
+with money and you get free picks from the fully revealed pool. Any player
+can occupy any lineup slot (`/swap` rearranges yours), and rosters/budgets
+are always public on the board, which is reposted at the bottom of the
+thread after every sale — no scrolling up.
 
 ## Setup
 
@@ -37,16 +39,15 @@ pinned board.
 Use this URL with your application's client ID (from **General Information**):
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=309237999616
+https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=309237991424
 ```
 
-The permissions integer `309237999616` covers exactly: Send Messages, Create
-Public Threads, Send Messages in Threads, Embed Links, Manage Messages (to pin
-the board), Read Message History, and Use External Emojis. It was computed
-with:
+The permissions integer `309237991424` covers exactly: Send Messages, Create
+Public Threads, Send Messages in Threads, Embed Links, Read Message History,
+and Use External Emojis. It was computed with:
 
 ```bash
-uv run python -c "import discord; print(discord.Permissions(send_messages=True, create_public_threads=True, send_messages_in_threads=True, embed_links=True, manage_messages=True, read_message_history=True, use_external_emojis=True).value)"
+uv run python -c "import discord; print(discord.Permissions(send_messages=True, create_public_threads=True, send_messages_in_threads=True, embed_links=True, read_message_history=True, use_external_emojis=True).value)"
 ```
 
 ### 3. Environment variables
@@ -54,7 +55,7 @@ uv run python -c "import discord; print(discord.Permissions(send_messages=True, 
 | Variable        | Required | Purpose                                                                     |
 | --------------- | -------- | --------------------------------------------------------------------------- |
 | `DISCORD_TOKEN` | yes      | Bot token from the Developer Portal                                          |
-| `LLM_API_KEY`   | no       | Enables the post-draft tournament sim (e.g. an OpenRouter key)               |
+| `LLM_API_KEY`   | no       | Only needed for sim mode `AI + stats` (e.g. an OpenRouter key); the stats-only sim needs no key |
 | `LLM_BASE_URL`  | no       | OpenAI-compatible endpoint; default `https://openrouter.ai/api/v1`           |
 | `SIM_MODEL`     | no       | Model slug for the sim; default `anthropic/claude-sonnet-4.5`                |
 | `TEST_GUILD_ID` | no       | Guild ID to mirror slash commands into for instant availability              |
@@ -102,23 +103,27 @@ private GitHub repo, clone with a fine-grained token URL
 
 ## How to play
 
-1. `/draft create` in a text channel — options for budget, opening window,
-   hammer timer, the sim, and an era range (`era_from` / `era_to`, decade
-   choices from **1960s** to **2020s**; default is all eras). Only players
-   whose prime falls inside the range enter the pool — a narrow range with a
-   big lobby may not be feasible, in which case `/draft start` asks you to
-   widen the range or shrink the lobby. It spawns a `🏀 Draft — <date>`
-   thread with a lobby; the creator is the commissioner.
+1. `/draft create` in a text channel — options: `budget` (default $20),
+   `clock` (15–300s each player stays on the block — flat, bids don't extend
+   it; default 60), `sim` (**Off** / **Stats only** / **AI + stats**; default
+   AI + stats), and an era range (`era_from` / `era_to`, decade choices from
+   **1960s** to **2020s**; default is all eras). Only players whose prime
+   falls inside the range enter the pool — a narrow range with a big lobby
+   may not be feasible, in which case `/draft start` asks you to widen the
+   range or shrink the lobby. It spawns a `🏀 Draft — <date>` thread with a
+   lobby; the creator is the commissioner.
 2. Everyone clicks **Join** in the lobby (2–10 managers).
-3. The commissioner runs `/draft start`. The pinned board tracks budgets and
-   rosters.
+3. The commissioner runs `/draft start`. The board tracks budgets and
+   rosters and is reposted at the bottom of the thread after every sale.
 4. Bid with **+$1 / +$2 / +$5** or **Custom…** on each lot card. Bids at or
    above half your remaining budget ask for a confirm tap. The high bidder
-   when the hammer falls pays and the player slots into their team.
+   when the flat clock expires pays and the player slots into their team.
 5. The last manager with money left picks the rest of their roster free via
    `/pick` (with autocomplete); everyone else's empty slots auto-fill.
-6. When every roster is full, the tournament sim posts game recaps and a
-   champion — re-run it any time with `/simulate`.
+6. When every roster is full, the tournament sim posts the standings and a
+   champion — re-run it any time with `/simulate`. Stats-only mode needs no
+   API key; **AI + stats** blends in an LLM ranking and falls back to stats
+   with a note when `LLM_API_KEY` is unset.
 
 Commissioner tools: `/draft pause`, `/draft resume`, `/draft addtime`,
 `/draft kick @user [replacement]`, `/draft cancel`. Anyone: `/swap`,

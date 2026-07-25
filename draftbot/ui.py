@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 from typing import TYPE_CHECKING, Optional
 
@@ -42,7 +41,7 @@ from .models import (
     ResumedFx,
     SoldFx,
 )
-from .sim import Game, Tournament
+from .sim import LLM_WEIGHT, SimResult
 
 if TYPE_CHECKING:
     from .bot import DraftBot, DraftSession
@@ -59,7 +58,11 @@ GOLD = 0xF1C40F
 
 POOL_LINES_PER_EMBED = 25
 CLOSE_BEAT_SECONDS = 2.0
-LOT_FOOTER = "bid up to your full remaining budget — hit $0 and you're done bidding"
+LOT_FOOTER = (
+    "flat clock — bids never add time · bid up to your full remaining "
+    "budget; hit $0 and you're done bidding"
+)
+SIM_LABELS = {"off": "off", "stats": "stats only", "ai": "AI + stats"}
 LAST_CALL_WARNING = "LAST CALL — passes again and they're force-assigned for $1"
 
 _NAME_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III", "IV", "V"})
@@ -158,7 +161,7 @@ def confirm_preview(
 
 
 def teams_for_sim(state: DraftState) -> list[dict]:
-    """Sim input per sim.run_tournament; manager names deduped defensively."""
+    """Sim input per sim.run_stats/run_ai; manager names deduped defensively."""
     seen: set[str] = set()
     teams: list[dict] = []
     for m in state.managers:
@@ -213,10 +216,10 @@ def lobby_embed(state: DraftState) -> discord.Embed:
     embed.add_field(
         name="Config",
         value=(
-            f"Budget **${cfg.budget}** · opening window **{cfg.open_seconds}s** · "
-            f"hammer **{cfg.hammer_seconds}s** · Eras: "
+            f"Budget **${cfg.budget}** · clock **{cfg.lot_seconds}s flat** "
+            "(bids never extend it) · Eras: "
             f"**{era_label(cfg.era_start, cfg.era_end)}** · tournament sim "
-            f"**{'on' if cfg.sim else 'off'}**"
+            f"**{SIM_LABELS.get(cfg.sim, cfg.sim)}**"
         ),
         inline=False,
     )
@@ -240,11 +243,11 @@ def lot_embed(lot: Lot, pool_left: int, paused: bool = False) -> discord.Embed:
     if lot.current_bid == 0:
         embed.add_field(name="Current Bid", value="$1 opening — no bids yet")
         embed.add_field(name="Leader", value="—")
-        status = f"Passes {rel(lot.deadline)} if nobody opens"
+        status = f"Passes {rel(lot.deadline)} if nobody bids"
     else:
         embed.add_field(name="Current Bid", value=f"${lot.current_bid}")
         embed.add_field(name="Leader", value=f"<@{lot.leader_id}>")
-        status = f"Hammer falls {rel(lot.deadline)}"
+        status = f"Sells {rel(lot.deadline)}"
     embed.add_field(name="Status", value="⏸️ Paused" if paused else status)
     embed.set_footer(text=LOT_FOOTER)
     return embed
@@ -367,24 +370,25 @@ def status_embed(state: DraftState, m: Manager) -> discord.Embed:
     return embed
 
 
-def game_embed(game: Game) -> discord.Embed:
-    return discord.Embed(
-        title=(
-            f"🏀 {game.round}: {game.home} {game.home_score} — "
-            f"{game.away_score} {game.away}"
-        ),
-        description=game.recap,
-        color=BLUE,
+def sim_results_embed(result: SimResult) -> discord.Embed:
+    standings = "\n".join(
+        f"`{rank}.` **{name}** — {score:.1f}"
+        for rank, (name, score) in enumerate(result.standings, 1)
     )
-
-
-def champion_embed(t: Tournament) -> discord.Embed:
     embed = discord.Embed(
-        title=f"🏆 {t.champion} wins the tournament!",
-        description=t.summary,
+        title=f"🏆 {result.champion} wins the tournament!",
+        description=standings,
         color=GOLD,
     )
-    embed.add_field(name="Tournament MVP", value=t.mvp)
+    if result.summary:
+        embed.add_field(name="How it played out", value=result.summary, inline=False)
+    if result.blended:
+        embed.set_footer(
+            text=(
+                f"Standings: {round((1 - LLM_WEIGHT) * 100)}% stats / "
+                f"{round(LLM_WEIGHT * 100)}% LLM"
+            )
+        )
     return embed
 
 
@@ -753,7 +757,7 @@ async def _render_lobby(
 
 async def _render_free_pick(session: "DraftSession", fx: FreePickFx) -> None:
     # Discord caps a message at 10 embeds AND 6000 chars across all embeds.
-    # Reachable pools (≤ 5N+10 = 60 players → ≤ 3 embeds) fit in one message;
+    # Reachable pools (≤ 5N = 50 players → ≤ 2 embeds) fit in one message;
     # the char budget guards any future config that grows the pool.
     batch: list[discord.Embed] = []
     batch_chars = 0
@@ -799,24 +803,16 @@ async def _render_resumed(session: "DraftSession", fx: ResumedFx) -> None:
 
 async def _render_complete(bot: "DraftBot", session: "DraftSession") -> None:
     bot._cancel_timer(session)
+    if session.board_task is not None:
+        session.board_task.cancel()  # a debounced repost would land after this
     bot._delete_snapshot(session.thread_id)
-    if session.board_message_id is not None:
-        # The 2s debounce can drop a BoardFx that lands mid-edit; nothing
-        # edits the board after completion, so force one final edit here.
-        try:
-            await session.thread.get_partial_message(
-                session.board_message_id
-            ).edit(embed=board_embed(session.state))
-        except discord.HTTPException:
-            log.exception("final board edit failed for %s", session.thread_id)
+    # Unconditional final board — reposted fresh so it sits at the bottom.
+    try:
+        await bot.repost_board(session)
+    except discord.HTTPException:
+        log.exception("final board repost failed for %s", session.thread_id)
     await session.thread.send(embed=complete_embed(session.state))
-    if not session.state.config.sim:
-        return
-    if not os.environ.get("LLM_API_KEY"):
-        await session.thread.send(
-            "🤖 Tournament sim skipped — no LLM_API_KEY set. "
-            "Add it and run /simulate."
-        )
+    if session.state.config.sim == "off":
         return
     session.sim_task = bot._spawn(bot._run_sim(session))
 

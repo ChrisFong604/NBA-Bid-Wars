@@ -36,16 +36,14 @@ class Config:
     slots: tuple[str, ...] = SLOTS
     era_start: int = 1960  # decade anchors, inclusive; host picks in
     era_end: int = 2020  # 10-year increments on /draft create
-    open_seconds: int = 20
-    hammer_seconds: int = 10
-    pool_extra: int = 10
+    lot_seconds: int = 60  # flat clock per lot — bids never extend it
     quick_bids: tuple[int, ...] = (1, 2, 5)
     min_managers: int = 2
     max_managers: int = 10
     pass_rule: str = "pass_once"  # or "recycle_forever"
     afk_lots: int = 10
     free_pick_seconds: int = 60
-    sim: bool = True
+    sim: str = "ai"  # "off" | "stats" (pure stat ranking) | "ai" (stats + weighted LLM ranking)
 
 
 @dataclass(frozen=True)

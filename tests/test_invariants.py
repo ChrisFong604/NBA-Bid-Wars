@@ -23,7 +23,7 @@ from draftbot.models import (
 )
 from helpers import make_players
 
-PLAYERS = make_players(10)  # 10 per position covers N=2..8 with pool_extra=10
+PLAYERS = make_players(10)  # 10 per position covers N=2..8 (pool = 5N exactly)
 
 
 def assert_invariants(state: DraftState) -> None:
@@ -43,14 +43,20 @@ def assert_invariants(state: DraftState) -> None:
         assert state.lot.player.id not in seen, "lot player duplicated"
     if state.phase in ("auction", "free_pick"):
         empties = sum(m.empty_slots for m in state.managers)
-        pool = len(state.queue) + (1 if state.lot is not None else 0)
-        assert pool == empties + cfg.pool_extra, "pool invariant broken"
+        remaining = len(state.queue) + (1 if state.lot is not None else 0)
+        assert remaining == empties, (
+            "players remaining (queue + live lot + free-pick pool) != "
+            "total empty slots across all managers"
+        )
     if state.phase == "auction":
         assert state.lot is not None
     if state.phase == "free_pick":
         assert len(state.active_managers) <= 1, "free_pick with 2+ actives"
     if state.phase == "complete":
         assert all(m.full for m in state.managers)
+        assert not state.queue and state.lot is None, (
+            "leftover pool players at completion — pool must be exactly 5N"
+        )
 
 
 def play_draft(seed: int, n: int) -> None:
@@ -68,7 +74,7 @@ def play_draft(seed: int, n: int) -> None:
         assert_invariants(state)
 
     step(Start(1, PLAYERS, now))
-    max_lots = 2 * (len(cfg.slots) * n + cfg.pool_extra)
+    max_lots = 2 * (len(cfg.slots) * n)
     guard = 0
     while state.phase in ("auction", "free_pick"):
         guard += 1

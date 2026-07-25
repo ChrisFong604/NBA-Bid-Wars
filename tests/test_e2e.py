@@ -68,10 +68,19 @@ def assert_invariants(state: DraftState) -> None:
         seen.add(p.id)
     if state.lot is not None:
         assert state.lot.player.id not in seen, "lot player duplicated"
+    if state.phase in ("auction", "free_pick"):
+        empties = sum(m.empty_slots for m in state.managers)
+        remaining = len(state.queue) + (1 if state.lot is not None else 0)
+        assert remaining == empties, (
+            "players remaining (queue + live lot + free-pick pool) != "
+            "total empty slots across all managers"
+        )
 
 
 def assert_complete_and_consistent(state: DraftState) -> None:
     assert state.phase == "complete"
+    # Zero leftovers: the pool is exactly 5N, so every player ends on a roster.
+    assert not state.queue and state.lot is None, "leftover pool players"
     placed: dict[str, int] = {}
     for m in state.managers:
         assert m.budget >= 0
@@ -166,7 +175,7 @@ def test_scripted_broke_freepick_pause_resume():
     and auto-fill to completion."""
     rng = random.Random(7)
     state = fresh_draft(rng)
-    assert 1 + len(state.queue) == 5 * N_MANAGERS + 10  # pool = 5N+10
+    assert 1 + len(state.queue) == 5 * N_MANAGERS  # pool = 5N exactly
 
     # Lot 1 passes: recycled to the back and flagged for LAST CALL.
     lot1 = state.lot
@@ -238,8 +247,8 @@ def test_scripted_broke_freepick_pause_resume():
     assert state.phase == "free_pick"
     free = next(f for f in fx if isinstance(f, FreePickFx))
     assert free.manager_id == 4
-    assert free.pool == state.queue
-    assert len(free.pool) == 5 * N_MANAGERS + 10 - 3  # 3 sold so far
+    assert free.pool == state.queue  # the whole remaining queue is revealed
+    assert len(free.pool) == 5 * N_MANAGERS - 3  # 3 sold so far
 
     # m4 free-picks a full roster; each pick re-arms the 60s pick timer.
     now = state.pick_deadline - 30.0
@@ -258,7 +267,7 @@ def test_scripted_broke_freepick_pause_resume():
     filled = next(f for f in fx if isinstance(f, AutoFilledFx))
     assert len(filled.assignments) == 3 * 4  # m1/m2/m3, 4 empty slots each
     assert any(isinstance(f, CompleteFx) for f in fx)
-    assert len(state.queue) == state.config.pool_extra  # pool never ran dry
+    assert len(state.queue) == 0  # zero leftovers: every pool player placed
     assert_complete_and_consistent(state)
     assert [state.manager(u).budget for u in (1, 2, 3, 4)] == [0, 0, 0, 20]
     assert Counter(e.kind for e in state.log) == Counter(
@@ -311,7 +320,7 @@ def test_narrow_era_draft_completes_with_only_in_era_players():
     state, _ = engine.apply(state, Start(1, eligible, 1_000.0), rng)
     assert state.phase == "auction"
     pool = (state.lot.player,) + state.queue
-    assert len(pool) == 5 * N_MANAGERS + 10
+    assert len(pool) == 5 * N_MANAGERS
     assert all(p.decade == 1990 for p in pool)
     while state.phase == "auction":  # nobody bids: pass → LAST CALL → force
         lot = state.lot
@@ -391,12 +400,12 @@ def test_pre_era_snapshot_loads_with_dataclass_defaults(tmp_path):
 
 def test_all_pass_draft_force_assigns_within_reveal_bound():
     """Nobody ever bids: every player passes once, comes back as LAST CALL,
-    and force-assigns at $1 until all rosters fill — inside the 2*(5N+10)
+    and force-assigns at $1 until all rosters fill — inside the 2*5N
     reveal bound (rule #6). afk_lots is raised so the AFK sweep doesn't
     flip everyone to autopilot first."""
     rng = random.Random(11)
     state = fresh_draft(rng, config=Config(afk_lots=1_000))
-    pool_size = 5 * N_MANAGERS + 10
+    pool_size = 5 * N_MANAGERS
     while state.phase == "auction":
         lot = state.lot
         state, fx = engine.apply(

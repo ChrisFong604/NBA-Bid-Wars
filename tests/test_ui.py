@@ -96,6 +96,30 @@ def test_lobby_embed_single_era_reads_as_one_decade():
     assert "Eras: **2000s**" in field.value
 
 
+def test_lobby_embed_shows_flat_clock_and_sim_mode():
+    state = DraftState(
+        config=Config(lot_seconds=45, sim="stats"), commissioner_id=1
+    )
+    field = next(f for f in ui.lobby_embed(state).fields if f.name == "Config")
+    assert "clock **45s flat**" in field.value
+    assert "stats only" in field.value
+    dump = field.value.lower()
+    assert "hammer" not in dump and "opening window" not in dump
+
+
+def test_lot_embed_flat_clock_no_hammer_wording():
+    lot = Lot(
+        seq=1, player=JORDAN, last_call=False,
+        current_bid=5, leader_id=2, deadline=1_000.0,
+    )
+    embed = ui.lot_embed(lot, pool_left=10)
+    status = next(f.value for f in embed.fields if f.name == "Status")
+    assert status == "Sells <t:1000:R>"
+    dump = str(embed.to_dict()).lower()
+    assert "hammer" not in dump and "opening window" not in dump
+    assert "flat clock" in embed.footer.text
+
+
 def test_lot_embed_description_has_prime_era_flavor_on_one_line():
     lot = Lot(seq=1, player=JORDAN, last_call=False, deadline=1_000.0)
     embed = ui.lot_embed(lot, pool_left=10)
