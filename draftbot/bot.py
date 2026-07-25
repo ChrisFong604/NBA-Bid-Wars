@@ -59,7 +59,10 @@ from .models import (
 
 log = logging.getLogger("draftbot")
 
-SNAPSHOT_DIR = Path(__file__).resolve().parent.parent / "snapshots"
+SNAPSHOT_DIR = Path(
+    os.environ.get("SNAPSHOT_DIR")
+    or Path(__file__).resolve().parent.parent / "snapshots"
+)
 BOARD_DEBOUNCE_SECONDS = 2.0
 SIM_GAME_BEAT_SECONDS = 1.5
 

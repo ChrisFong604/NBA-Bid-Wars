@@ -1,0 +1,20 @@
+services:
+  - type: worker
+    name: nba-draft-bot
+    runtime: python
+    plan: starter
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run python -m draftbot
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: SNAPSHOT_DIR
+        value: /var/data/snapshots
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    disk:
+      name: snapshots
+      mountPath: /var/data
+      sizeGB: 1
