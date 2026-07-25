@@ -74,8 +74,31 @@ uv sync
 uv run python -m draftbot
 ```
 
-Snapshots land in `snapshots/` next to the package; if the bot restarts
-mid-draft it re-opens the interrupted player and carries on.
+Snapshots land in `snapshots/` next to the package (override with
+`SNAPSHOT_DIR`); if the bot restarts mid-draft it re-opens the interrupted
+player and carries on.
+
+### Deploying on a free GCP e2-micro
+
+Google's always-free tier covers one `e2-micro` VM — enough for this bot.
+When creating the instance, the free tier only applies if you pick exactly:
+region **us-west1, us-central1, or us-east1**, machine type **e2-micro**,
+and a **standard** persistent disk (not balanced/SSD, ≤30 GB). Debian 12+.
+Then:
+
+```bash
+gcloud compute ssh <instance-name>          # or SSH from the console
+git clone <your-repo-url> && sudo bash nba-draft-bot/deploy/setup.sh <your-repo-url>
+sudo nano /etc/draftbot.env                 # paste real tokens
+sudo systemctl start draftbot
+journalctl -u draftbot -f                   # watch it come up
+```
+
+The script installs uv, creates a `draftbot` system user under
+`/opt/nba-draft-bot`, adds 1 GB of swap (installs can OOM 1 GB of RAM),
+and installs a systemd unit that restarts the bot on crash and boot. For a
+private GitHub repo, clone with a fine-grained token URL
+(`https://<token>@github.com/you/nba-draft-bot.git`) or make the repo public.
 
 ## How to play
 

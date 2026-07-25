@@ -1,0 +1,16 @@
+[Unit]
+Description=NBA blind-auction draft Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=draftbot
+WorkingDirectory=/opt/nba-draft-bot
+EnvironmentFile=/etc/draftbot.env
+ExecStart=/opt/nba-draft-bot/.venv/bin/python -m draftbot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
