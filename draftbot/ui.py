@@ -812,9 +812,9 @@ async def _render_complete(bot: "DraftBot", session: "DraftSession") -> None:
     await session.thread.send(embed=complete_embed(session.state))
     if not session.state.config.sim:
         return
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not os.environ.get("LLM_API_KEY"):
         await session.thread.send(
-            "🤖 Tournament sim skipped — no ANTHROPIC_API_KEY set. "
+            "🤖 Tournament sim skipped — no LLM_API_KEY set. "
             "Add it and run /simulate."
         )
         return

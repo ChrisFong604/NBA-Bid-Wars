@@ -863,9 +863,9 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
                 interaction, "The sim runs after the draft completes."
             )
             return
-        if not os.environ.get("ANTHROPIC_API_KEY"):
+        if not os.environ.get("LLM_API_KEY"):
             await _reply_ephemeral(
-                interaction, "Set ANTHROPIC_API_KEY to run the tournament sim."
+                interaction, "Set LLM_API_KEY to run the tournament sim."
             )
             return
         if session.sim_task is not None and not session.sim_task.done():

@@ -5,7 +5,8 @@ revealed one at a time from a hidden shuffled queue, managers bid live with
 buttons, and every roster fills to five. The pool can span any run of eras
 from the 1960s through the 2020s — every player is anchored to the decade of
 their prime, and the commissioner picks the era range at creation. When the
-draft completes, Claude simulates a tournament between the drafted teams —
+draft completes, an LLM of your choice (via OpenRouter or any OpenAI-compatible
+router) simulates a tournament between the drafted teams —
 primes face primes across eras (1991 Jordan vs 2016 Curry) — and crowns a
 champion. State is snapshotted atomically to disk, so the bot survives a
 mid-auction restart.
@@ -50,11 +51,17 @@ uv run python -c "import discord; print(discord.Permissions(send_messages=True, 
 
 ### 3. Environment variables
 
-| Variable            | Required | Purpose                                                        |
-| ------------------- | -------- | -------------------------------------------------------------- |
-| `DISCORD_TOKEN`     | yes      | Bot token from the Developer Portal                             |
-| `ANTHROPIC_API_KEY` | no       | Enables the post-draft tournament sim (skipped without it)      |
-| `TEST_GUILD_ID`     | no       | Guild ID to mirror slash commands into for instant availability |
+| Variable        | Required | Purpose                                                                     |
+| --------------- | -------- | --------------------------------------------------------------------------- |
+| `DISCORD_TOKEN` | yes      | Bot token from the Developer Portal                                          |
+| `LLM_API_KEY`   | no       | Enables the post-draft tournament sim (e.g. an OpenRouter key)               |
+| `LLM_BASE_URL`  | no       | OpenAI-compatible endpoint; default `https://openrouter.ai/api/v1`           |
+| `SIM_MODEL`     | no       | Model slug for the sim; default `anthropic/claude-sonnet-4.5`                |
+| `TEST_GUILD_ID` | no       | Guild ID to mirror slash commands into for instant availability              |
+
+The sim speaks the OpenAI-compatible chat API, so any router works —
+OpenRouter, LiteLLM, Groq, or a local Ollama. Point `LLM_BASE_URL` at the
+endpoint and set `SIM_MODEL` to whatever model slug it serves.
 
 Global slash-command sync can take **up to an hour** to propagate; setting
 `TEST_GUILD_ID` additionally syncs the commands to that one server instantly,

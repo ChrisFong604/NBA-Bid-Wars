@@ -1,19 +1,22 @@
 """Post-draft LLM tournament simulation (DESIGN.md section 5).
 
-One request to Claude with every roster; structured output guarantees a
-parseable ``Tournament``. Format is decided here in Python — round-robin for
-small fields, a stars-seeded knockout bracket above that — and the model is
-instructed to narrate results consistent with it.
+One request to an OpenAI-compatible chat endpoint — OpenRouter by default,
+any router via ``LLM_BASE_URL``/``LLM_API_KEY``, model picked by ``SIM_MODEL``
+— with every roster; the prompt embeds the ``Tournament`` JSON schema and the
+reply is validated against it. Format is decided here in Python — round-robin
+for small fields, a stars-seeded knockout bracket above that — and the model
+is instructed to narrate results consistent with it.
 """
 from __future__ import annotations
 
 import itertools
+import json
+import os
 
-import anthropic
+import openai
 import pydantic
 from pydantic import BaseModel
 
-MODEL = "claude-opus-5"
 MAX_TOKENS = 16000
 ROUND_ROBIN_MAX_TEAMS = 6
 
@@ -39,37 +42,60 @@ class SimError(Exception):
 
 
 async def run_tournament(teams: list[dict]) -> Tournament:
-    """Simulate a tournament between the drafted teams via Claude.
+    """Simulate a tournament between the drafted teams via an LLM.
 
     ``teams`` shape: ``[{"manager": str, "players": [{"slot", "name", "pos",
     "ppg", "rpg", "apg", "stars"}, ...]}, ...]``. Raises ``SimError`` on bad
-    input, API failure, refusal, or an inconsistent result.
+    input, API failure, or a malformed/inconsistent result.
     """
     names = _team_names(teams)
     prompt = _build_prompt(teams)
+    model = os.environ.get("SIM_MODEL", "anthropic/claude-sonnet-4.5")
     try:
-        async with anthropic.AsyncAnthropic() as client:
-            response = await client.messages.parse(
-                model=MODEL,
+        client = openai.AsyncOpenAI(
+            api_key=os.environ.get("LLM_API_KEY"),
+            base_url=os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
+        )
+        async with client:
+            response = await client.chat.completions.create(
+                model=model,
                 max_tokens=MAX_TOKENS,
                 messages=[{"role": "user", "content": prompt}],
-                output_format=Tournament,
             )
-    except anthropic.AnthropicError as exc:
+    except openai.OpenAIError as exc:
         raise SimError(f"The tournament sim hit an API error: {exc}") from exc
-    except pydantic.ValidationError as exc:
-        raise SimError("The sim returned a malformed result — try again.") from exc
 
-    if response.stop_reason == "refusal":
-        raise SimError("Claude declined to simulate this tournament — try again.")
-    tournament = response.parsed_output
-    if tournament is None:
+    content = response.choices[0].message.content
+    if not content:
         raise SimError("The sim returned no usable result — try again.")
+    tournament = _parse_tournament(content)
     _validate(tournament, names)
     return tournament
 
 
 # ------------------------------------------------------------------ helpers
+
+
+def _parse_tournament(content: str) -> Tournament:
+    """Validate the model's reply, tolerating fences and surrounding prose."""
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3]
+        text = text.strip()
+    try:
+        return Tournament.model_validate_json(text)
+    except pydantic.ValidationError:
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            raise SimError("The sim returned a malformed result — try again.")
+        try:
+            return Tournament.model_validate_json(text[start : end + 1])
+        except pydantic.ValidationError as exc:
+            raise SimError(
+                "The sim returned a malformed result — try again."
+            ) from exc
 
 
 def _team_names(teams: list[dict]) -> frozenset[str]:
@@ -185,7 +211,12 @@ def _build_prompt(teams: list[dict]) -> str:
         "  pace, spacing, hand-checking, three-point volume — as prime meets\n"
         "  prime across decades.\n"
         "- Name one tournament MVP: an individual player, not a manager.\n"
-        "- End with a short, punchy 1-2 sentence summary of the tournament."
+        "- End with a short, punchy 1-2 sentence summary of the tournament.\n"
+        "\n"
+        "OUTPUT\n"
+        "Respond with ONLY a single JSON object matching this JSON schema.\n"
+        "No markdown fences, no prose before or after the JSON object.\n"
+        f"{json.dumps(Tournament.model_json_schema())}"
     )
 
 

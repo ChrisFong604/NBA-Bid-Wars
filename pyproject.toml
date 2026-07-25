@@ -5,7 +5,7 @@ description = "Discord blind-auction NBA draft bot with an LLM-simulated tournam
 requires-python = ">=3.11"
 dependencies = [
     "discord.py>=2.4",
-    "anthropic>=0.60",
+    "openai>=1.60",
 ]
 
 [dependency-groups]

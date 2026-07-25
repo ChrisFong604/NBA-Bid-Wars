@@ -159,7 +159,7 @@ Findings from the UX research, discord.py-flavored:
 
 ## 3. Architecture (Python + discord.py)
 
-Single process, minimal dependencies: `discord.py`, `anthropic`, and `nba_api`
+Single process, minimal dependencies: `discord.py`, `openai`, and `nba_api`
 (dataset script only). No database server.
 
 ```
@@ -239,18 +239,20 @@ tests/
 
 ## 5. LLM Tournament Sim (`sim.py`)
 
-- Python `anthropic` SDK, model **`claude-opus-5`**, `ANTHROPIC_API_KEY` from
-  env (validated at startup when sim is enabled).
+- Python `openai` SDK pointed at an OpenAI-compatible router (`LLM_BASE_URL`,
+  default OpenRouter), model from `SIM_MODEL` (default
+  **`anthropic/claude-sonnet-4.5`**), `LLM_API_KEY` from env (checked before
+  the sim runs when enabled).
 - One request per tournament: all rosters with slot assignments, per-player
   prime stats, prime years, and era, plus the format (round-robin ≤ 6 teams,
   seeded knockout above). The prompt states that **every player competes at
   their prime** — 1991 Jordan takes the floor against 2016 Curry — and invites
   the model to play the cross-era style clashes (pace, spacing, physicality)
   for flavor in the recaps.
-- **Structured output** via `client.messages.parse()` with a Pydantic model:
-  `{games: [{home, away, score, recap}], standings, champion, mvp}` — no JSON
-  parsing hazards. Use streaming (`messages.stream` + `get_final_message()`)
-  since the output can be long.
+- **Schema-guided output**: the prompt embeds the Pydantic `Tournament` JSON
+  schema (`{games: [{round, home, away, home_score, away_score, recap}],
+  champion, mvp, summary}`) and demands a bare JSON object; the reply is
+  validated with Pydantic, tolerating markdown fences and surrounding prose.
 - The bot posts one embed per game with a dramatic beat between them, then a
   🏆 champion card. On API failure: report the error and offer a retry button —
   never fake a result.

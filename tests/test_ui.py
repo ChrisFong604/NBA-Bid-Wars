@@ -152,7 +152,7 @@ def test_bot_module_imports_without_any_token():
     env = {
         k: v
         for k, v in os.environ.items()
-        if k not in ("DISCORD_TOKEN", "ANTHROPIC_API_KEY", "TEST_GUILD_ID")
+        if k not in ("DISCORD_TOKEN", "LLM_API_KEY", "LLM_BASE_URL", "SIM_MODEL", "TEST_GUILD_ID")
     }
     proc = subprocess.run(
         [sys.executable, "-c", "import draftbot.bot, draftbot.__main__"],

@@ -1,10 +1,10 @@
-"""Tests for draftbot.sim — no network; the anthropic client is faked."""
+"""Tests for draftbot.sim — no network; the OpenAI-compatible client is faked."""
 from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
 
-import anthropic
+import openai
 import pytest
 
 from draftbot import sim
@@ -53,12 +53,12 @@ def _tournament(names: list[str], champion: str | None = None) -> Tournament:
     )
 
 
-class _FakeMessages:
+class _FakeCompletions:
     def __init__(self, outcome, calls: list[dict]):
         self._outcome = outcome
         self._calls = calls
 
-    async def parse(self, **kwargs):
+    async def create(self, **kwargs):
         self._calls.append(kwargs)
         if isinstance(self._outcome, Exception):
             raise self._outcome
@@ -67,7 +67,7 @@ class _FakeMessages:
 
 class _FakeClient:
     def __init__(self, outcome, calls: list[dict]):
-        self.messages = _FakeMessages(outcome, calls)
+        self.chat = SimpleNamespace(completions=_FakeCompletions(outcome, calls))
 
     async def __aenter__(self):
         return self
@@ -77,16 +77,23 @@ class _FakeClient:
 
 
 def _patch_client(monkeypatch, outcome) -> list[dict]:
-    """Replace anthropic.AsyncAnthropic with a fake; returns recorded calls."""
+    """Replace openai.AsyncOpenAI with a fake; returns recorded calls."""
     calls: list[dict] = []
     monkeypatch.setattr(
-        sim.anthropic, "AsyncAnthropic", lambda: _FakeClient(outcome, calls)
+        sim.openai, "AsyncOpenAI", lambda **kwargs: _FakeClient(outcome, calls)
     )
+    monkeypatch.delenv("SIM_MODEL", raising=False)
     return calls
 
 
-def _ok_response(tournament) -> SimpleNamespace:
-    return SimpleNamespace(stop_reason="end_turn", parsed_output=tournament)
+def _response(content: str | None) -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+def _ok_response(tournament: Tournament) -> SimpleNamespace:
+    return _response(tournament.model_dump_json())
 
 
 # ------------------------------------------------------------ happy path
@@ -97,7 +104,7 @@ def test_success_returns_parsed_tournament(monkeypatch):
     canned = _tournament([t["manager"] for t in teams])
     _patch_client(monkeypatch, _ok_response(canned))
     result = asyncio.run(sim.run_tournament(teams))
-    assert result is canned
+    assert result == canned
 
 
 def test_request_uses_model_and_max_tokens(monkeypatch):
@@ -105,9 +112,26 @@ def test_request_uses_model_and_max_tokens(monkeypatch):
     calls = _patch_client(monkeypatch, _ok_response(_tournament([t["manager"] for t in teams])))
     asyncio.run(sim.run_tournament(teams))
     (call,) = calls
-    assert call["model"] == "claude-opus-5"
+    assert call["model"] == "anthropic/claude-sonnet-4.5"
     assert call["max_tokens"] == 16000
-    assert call["output_format"] is Tournament
+
+
+def test_sim_model_env_var_overrides_model(monkeypatch):
+    teams = _teams(3)
+    calls = _patch_client(monkeypatch, _ok_response(_tournament([t["manager"] for t in teams])))
+    monkeypatch.setenv("SIM_MODEL", "meta-llama/llama-3.3-70b-instruct")
+    asyncio.run(sim.run_tournament(teams))
+    (call,) = calls
+    assert call["model"] == "meta-llama/llama-3.3-70b-instruct"
+
+
+def test_prompt_embeds_output_schema(monkeypatch):
+    teams = _teams(3)
+    calls = _patch_client(monkeypatch, _ok_response(_tournament([t["manager"] for t in teams])))
+    asyncio.run(sim.run_tournament(teams))
+    prompt = calls[0]["messages"][0]["content"]
+    assert "OUTPUT" in prompt
+    assert '"champion"' in prompt  # schema is embedded verbatim
 
 
 # ------------------------------------------------------- format selection
@@ -216,35 +240,52 @@ def test_game_with_unknown_team_raises(monkeypatch):
 
 
 def test_fewer_than_two_teams_raises(monkeypatch):
-    calls = _patch_client(monkeypatch, _ok_response(None))
+    calls = _patch_client(monkeypatch, _response(None))
     with pytest.raises(SimError, match="at least two"):
         asyncio.run(sim.run_tournament(_teams(1)))
     assert calls == []  # rejected before any API call
 
 
+# ------------------------------------------------------------ output parsing
+
+
+def test_fenced_json_output_parses(monkeypatch):
+    teams = _teams(4)
+    canned = _tournament([t["manager"] for t in teams])
+    fenced = f"```json\n{canned.model_dump_json()}\n```"
+    _patch_client(monkeypatch, _response(fenced))
+    result = asyncio.run(sim.run_tournament(teams))
+    assert result == canned
+
+
+def test_json_wrapped_in_prose_parses(monkeypatch):
+    teams = _teams(4)
+    canned = _tournament([t["manager"] for t in teams])
+    chatty = f"Here is your tournament!\n{canned.model_dump_json()}\nEnjoy."
+    _patch_client(monkeypatch, _response(chatty))
+    result = asyncio.run(sim.run_tournament(teams))
+    assert result == canned
+
+
 # ------------------------------------------------------- failure handling
 
 
-def test_refusal_raises_sim_error(monkeypatch):
+def test_empty_content_raises_sim_error(monkeypatch):
     teams = _teams(4)
-    _patch_client(
-        monkeypatch, SimpleNamespace(stop_reason="refusal", parsed_output=None)
-    )
-    with pytest.raises(SimError, match="declined"):
+    _patch_client(monkeypatch, _response(None))
+    with pytest.raises(SimError, match="no usable result"):
         asyncio.run(sim.run_tournament(teams))
 
 
-def test_none_parsed_output_raises_sim_error(monkeypatch):
+def test_malformed_json_raises_sim_error(monkeypatch):
     teams = _teams(4)
-    _patch_client(
-        monkeypatch, SimpleNamespace(stop_reason="end_turn", parsed_output=None)
-    )
-    with pytest.raises(SimError, match="no usable result"):
+    _patch_client(monkeypatch, _response("sorry, no basketball today"))
+    with pytest.raises(SimError, match="malformed"):
         asyncio.run(sim.run_tournament(teams))
 
 
 def test_api_error_wrapped_in_sim_error(monkeypatch):
     teams = _teams(4)
-    _patch_client(monkeypatch, anthropic.AnthropicError("boom"))
+    _patch_client(monkeypatch, openai.OpenAIError("boom"))
     with pytest.raises(SimError, match="API error"):
         asyncio.run(sim.run_tournament(teams))
