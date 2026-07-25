@@ -15,7 +15,7 @@ services:
       - key: LLM_API_KEY
         sync: false
       - key: SIM_MODEL
-        value: "anthropic/claude-sonnet-4.5"
+        value: "google/gemini-3.6-flash"
     disk:
       name: snapshots
       mountPath: /var/data
