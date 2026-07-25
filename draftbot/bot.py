@@ -579,7 +579,7 @@ def register_commands(bot: DraftBot) -> None:  # noqa: PLR0915 - command defs
         clock: app_commands.Range[int, 15, 300] = 60,
         era_from: int = 1960,
         era_to: int = 2020,
-        sim: str = "ai",  # shadows the sim module only inside this closure
+        sim: str = "off",  # shadows the sim module only inside this closure
     ) -> None:
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):

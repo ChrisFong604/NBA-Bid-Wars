@@ -1,6 +1,7 @@
 """Snapshot persistence: roundtrip fidelity and atomic writes."""
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -66,7 +67,12 @@ def test_old_style_config_snapshot_loads(tmp_path):
     assert loaded.config.lot_seconds == 60  # default fills the missing key
     assert loaded.config.sim == "ai"  # True -> "ai"
     assert not hasattr(loaded.config, "pool_extra")
-    assert loaded == state  # everything else survives untouched
+    # everything else survives untouched (sim True coerces to "ai", which
+    # differs from the fresh-Config default of "off")
+    expected = dataclasses.replace(
+        state, config=dataclasses.replace(state.config, sim="ai")
+    )
+    assert loaded == expected
     # sim False coerces to "off".
     cfg["sim"] = False
     path.write_text(json.dumps(payload), encoding="utf-8")

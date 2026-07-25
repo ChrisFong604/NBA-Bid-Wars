@@ -106,7 +106,7 @@ private GitHub repo, clone with a fine-grained token URL
 1. `/draft create` in a text channel — options: `budget` (default $20),
    `clock` (15–300s each player stays on the block — flat, bids don't extend
    it; default 60), `sim` (**Off** / **Stats only** / **AI + stats**; default
-   AI + stats), and an era range (`era_from` / `era_to`, decade choices from
+   Off), and an era range (`era_from` / `era_to`, decade choices from
    **1960s** to **2020s**; default is all eras). Only players whose prime
    falls inside the range enter the pool — a narrow range with a big lobby
    may not be feasible, in which case `/draft start` asks you to widen the
