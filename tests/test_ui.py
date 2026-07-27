@@ -105,6 +105,17 @@ def test_lobby_embed_shows_flat_clock_and_sim_mode():
     assert "hammer" not in dump and "opening window" not in dump
 
 
+def test_lot_embed_final_seconds_warning():
+    lot = Lot(
+        seq=1, player=JORDAN, last_call=False,
+        current_bid=5, leader_id=2, deadline=1_000.0,
+    )
+    embed = ui.lot_embed(lot, pool_left=10, final_seconds=True)
+    status = next(f.value for f in embed.fields if f.name == "Status")
+    assert "FINAL SECONDS" in status and "<t:1000:R>" in status
+    assert embed.color.value == ui.ORANGE
+
+
 def test_lot_embed_flat_clock_no_hammer_wording():
     lot = Lot(
         seq=1, player=JORDAN, last_call=False,

@@ -31,7 +31,7 @@ an LLM ranking) and crowns a champion.
 ### The auction loop
 4. The next player is revealed as a card: name, team, position, last-season
    `ppg/rpg/apg`, and a 1–5 ⭐ rating derived from those stats.
-5. **Flat clock (default 60s):** each lot gets one countdown, armed at reveal —
+5. **Flat clock (default 30s):** each lot gets one countdown, armed at reveal —
    bids never extend it. Any eligible manager may open at any integer from $1
    up to their entire remaining budget — jump openings allowed, and going all-in
    ($20 on the very first player) is legal.

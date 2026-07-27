@@ -64,6 +64,7 @@ SNAPSHOT_DIR = Path(
     or Path(__file__).resolve().parent.parent / "snapshots"
 )
 BOARD_DEBOUNCE_SECONDS = 2.0
+FINAL_WARN_SECONDS = ui.FINAL_WARN_SECONDS
 
 # Snapshot on lot boundaries / phase changes / roster changes — never on a
 # bare BidPlaced. LobbyFx/BoardFx are included so lobby membership and swaps
@@ -252,6 +253,30 @@ class DraftBot(discord.Client):
     async def _timer(
         self, session: DraftSession, kind: str, lot_seq: int, deadline: float
     ) -> None:
+        # Mobile Discord doesn't tick <t:..:R> countdowns, so lots get one
+        # loud card edit with FINAL_WARN_SECONDS left. Pause/addtime cancel
+        # or re-arm this task, and the state guard below covers the rest.
+        warn_at = deadline - FINAL_WARN_SECONDS
+        if kind == "lot" and warn_at - time.time() > 2.0:
+            await asyncio.sleep(warn_at - time.time())
+            state = session.state
+            lot = state.lot
+            if (
+                not state.paused
+                and lot is not None
+                and lot.seq == lot_seq
+                and lot.deadline == deadline
+            ):
+                try:
+                    await ui.edit_lot(
+                        session,
+                        ui.lot_embed(
+                            lot, 1 + len(state.queue), final_seconds=True
+                        ),
+                        clear=False,
+                    )
+                except discord.HTTPException:
+                    log.debug("final-seconds edit failed", exc_info=True)
         await asyncio.sleep(max(0.0, deadline - time.time()))
         event = TimerExpired(
             kind=kind, lot_seq=lot_seq, deadline=deadline, now=time.time()
@@ -554,7 +579,7 @@ def register_commands(bot: DraftBot) -> None:
     @draft.command(name="create", description="Open a draft lobby in a new thread")
     @app_commands.describe(
         budget="Starting budget per manager (default $20)",
-        clock="Seconds each player stays on the block — flat, bids don't extend it (default 60)",
+        clock="Seconds each player stays on the block — flat, bids don't extend it (default 30)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
         sim="Post-draft tournament sim mode (default: prompt for your own LLM)",
@@ -572,7 +597,7 @@ def register_commands(bot: DraftBot) -> None:
     async def draft_create(
         interaction: discord.Interaction,
         budget: app_commands.Range[int, 1, 1000] = 20,
-        clock: app_commands.Range[int, 15, 300] = 60,
+        clock: app_commands.Range[int, 15, 300] = 30,
         era_from: int = 1960,
         era_to: int = 2020,
         sim: str = "prompt",  # shadows the sim module only inside this closure

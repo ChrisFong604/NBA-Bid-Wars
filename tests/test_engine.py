@@ -536,19 +536,23 @@ def test_swap_invalid_slots_rejected():
 
 def test_pause_resume_deadline_math_auction():
     state, _, rng = start_draft(2)
-    assert state.lot.deadline == 1060.0  # 1000 + lot_seconds
+    assert state.lot.deadline == 1000.0 + CFG.lot_seconds
     state, fx = engine.apply(state, Pause(1, 1010.0), rng)
-    assert state.paused and state.pause_remaining == 50.0
+    assert state.paused and state.pause_remaining == CFG.lot_seconds - 10.0
     assert fx == [CancelTimerFx(), PausedFx()]
     # Paused: bids rejected, timers ignored.
     _, fx = engine.apply(state, Bid(2, 1, 1011.0, amount=3), rng)
     assert isinstance(fx[0], ErrorFx)
-    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1060.0, 1060.0), rng)
+    state2, fx = engine.apply(
+        state,
+        TimerExpired("lot", 1, 1000.0 + CFG.lot_seconds, 1000.0 + CFG.lot_seconds),
+        rng,
+    )
     assert state2 is state and fx == []
     state, fx = engine.apply(state, Resume(1, 2000.0), rng)
     assert not state.paused and state.pause_remaining == 0.0
-    assert state.lot.deadline == 2050.0  # pause/resume DOES shift the clock
-    assert fx == [ResumedFx(state.lot), ArmTimerFx("lot", 1, 2050.0)]
+    assert state.lot.deadline == 2000.0 + CFG.lot_seconds - 10.0  # pause/resume DOES shift the clock
+    assert fx == [ResumedFx(state.lot), ArmTimerFx("lot", 1, 2000.0 + CFG.lot_seconds - 10.0)]
 
 
 def test_pause_resume_deadline_math_free_pick():

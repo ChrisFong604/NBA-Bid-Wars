@@ -64,7 +64,7 @@ def test_old_style_config_snapshot_loads(tmp_path):
     path.write_text(json.dumps(payload), encoding="utf-8")
     loaded, meta = load_snapshot(path)
     assert meta == {"thread_id": 3}
-    assert loaded.config.lot_seconds == 60  # default fills the missing key
+    assert loaded.config.lot_seconds == 30  # default fills the missing key
     assert loaded.config.sim == "ai"  # True -> "ai"
     assert not hasattr(loaded.config, "pool_extra")
     # everything else survives untouched (sim True coerces to "ai", which

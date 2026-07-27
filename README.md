@@ -13,7 +13,7 @@ and crowns a champion. State is snapshotted atomically to disk, so the bot
 survives a mid-auction restart.
 
 **The rules in brief:** everyone starts with the same budget (default $20).
-Each revealed player stays on the block for one flat clock (default 60s) —
+Each revealed player stays on the block for one flat clock (default 30s) —
 bids never extend it; the high bid when it expires wins. No bid means the
 player is recycled once — on their second appearance (🔔 LAST CALL) they sell
 or get force-assigned at $1. The pool is exactly five players per manager, so
@@ -106,7 +106,7 @@ private GitHub repo, clone with a fine-grained token URL
 
 1. `/draft create` in a text channel — options: `budget` (default $20),
    `clock` (15–300s each player stays on the block — flat, bids don't extend
-   it; default 60), `sim` (**Prompt for your own LLM** / **Off** /
+   it; default 30), `sim` (**Prompt for your own LLM** / **Off** /
    **Stats only** / **AI + stats**; default Prompt — a copy-pastable prompt
    you run in your own LLM), and an era range (`era_from` / `era_to`, decade choices from
    **1960s** to **2020s**; default is all eras). Only players whose prime

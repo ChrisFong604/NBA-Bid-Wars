@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -56,6 +57,7 @@ YELLOW = 0xFEE75C
 RED = 0xED4245
 GOLD = 0xF1C40F
 
+FINAL_WARN_SECONDS = 10.0  # lot-card warning edit for non-ticking mobile clients
 POOL_LINES_PER_EMBED = 25
 MAX_EMBEDS_PER_MESSAGE = 10  # Discord hard cap per message
 EMBED_CHAR_BUDGET = 5500  # headroom under Discord's 6000-char embed total
@@ -244,18 +246,22 @@ def lobby_embed(state: DraftState) -> discord.Embed:
     return embed
 
 
-def lot_embed(lot: Lot, pool_left: int, paused: bool = False) -> discord.Embed:
+def lot_embed(
+    lot: Lot, pool_left: int, paused: bool = False, final_seconds: bool = False
+) -> discord.Embed:
     p = lot.player
     title = f"🏀 {p.name} — {p.pos}"
     description = _stat_line(p)
     if lot.last_call:
         title = f"🔔 {title}"
         description = f"**{LAST_CALL_WARNING}**\n{description}"
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=YELLOW if lot.last_call else BLUE,
-    )
+    if final_seconds:  # mobile clients don't tick <t:..:R> — this edit is
+        color = ORANGE  # their loud signal that the clock is nearly done
+    elif lot.last_call:
+        color = YELLOW
+    else:
+        color = BLUE
+    embed = discord.Embed(title=title, description=description, color=color)
     embed.set_author(name=f"Lot #{lot.seq} - {pool_left} players left in the pool")
     if lot.current_bid == 0:
         embed.add_field(name="Current Bid", value="$1 opening — no bids yet")
@@ -265,6 +271,8 @@ def lot_embed(lot: Lot, pool_left: int, paused: bool = False) -> discord.Embed:
         embed.add_field(name="Current Bid", value=f"${lot.current_bid}")
         embed.add_field(name="Leader", value=f"<@{lot.leader_id}>")
         status = f"Sells {rel(lot.deadline)}"
+    if final_seconds:
+        status = f"⏳ **FINAL SECONDS** — {status[0].lower()}{status[1:]}"
     embed.add_field(name="Status", value="⏸️ Paused" if paused else status)
     embed.set_footer(text=LOT_FOOTER)
     return embed
@@ -716,7 +724,13 @@ async def _render_bid(
     fx: BidPlaced,
     interaction: discord.Interaction | None,
 ) -> None:
-    embed = lot_embed(fx.lot, pool_left=1 + len(state.queue))
+    # A bid inside the warning window must not wipe the FINAL SECONDS styling
+    # the timer task painted (mobile clients rely on it).
+    embed = lot_embed(
+        fx.lot,
+        pool_left=1 + len(state.queue),
+        final_seconds=fx.lot.deadline - time.time() <= FINAL_WARN_SECONDS,
+    )
     await _edit_via_interaction_or_id(
         session, interaction, session.lot_message_id, embed
     )
