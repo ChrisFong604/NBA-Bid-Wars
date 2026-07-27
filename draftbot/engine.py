@@ -32,6 +32,7 @@ from .models import (
     Join,
     Kick,
     Leave,
+    LineupPhaseFx,
     LobbyFx,
     LogEntry,
     Lot,
@@ -75,6 +76,8 @@ def apply(
             return _lot_expired(state, event, r)
         if event.kind == "pick":
             return _pick_expired(state, event, r)
+        if event.kind == "lineup":
+            return _lineup_expired(state, event)
         return state, []
     if isinstance(event, Pick):
         return _pick(state, event, r)
@@ -140,6 +143,23 @@ def _err(state: DraftState, user_id: int, message: str) -> Transition:
 def _with_manager(state: DraftState, m: Manager) -> DraftState:
     managers = tuple(m if x.user_id == m.user_id else x for x in state.managers)
     return replace(state, managers=managers)
+
+
+def _finish(state: DraftState, now: float, fx: list[Effect]) -> Transition:
+    """All rosters just filled. Open the arrange-your-lineup window (rule:
+    swaps only, then the draft locks), or complete instantly when
+    ``lineup_seconds`` is 0."""
+    if state.config.lineup_seconds > 0:
+        deadline = now + state.config.lineup_seconds
+        state2 = replace(
+            state, phase="lineup", pick_deadline=0.0, lineup_deadline=deadline
+        )
+        return state2, fx + [
+            LineupPhaseFx(deadline),
+            ArmTimerFx("lineup", -1, deadline),
+        ]
+    state2 = replace(state, phase="complete", pick_deadline=0.0)
+    return state2, fx + [CompleteFx()]
 
 
 def _assign(m: Manager, player: Player, price: int) -> Manager:
@@ -350,9 +370,9 @@ def _resolve_next(
             fx.append(AutopilotFx(m.user_id))
         managers.append(m)
     state = replace(state, managers=tuple(managers))
-    # (b) everyone full -> done.
+    # (b) everyone full -> lineup window (or instant complete).
     if all(m.full for m in state.managers):
-        return replace(state, phase="complete"), fx + [CompleteFx()]
+        return _finish(state, now, fx)
     # (c) phase by active count (rules #12-#14).
     actives = state.active_managers
     if len(actives) >= 2:
@@ -366,11 +386,11 @@ def _resolve_next(
             ArmTimerFx("pick", -1, deadline),
         ]
         return state2, fx + pick_fx
-    return _auto_fill(state, rng, fx)
+    return _auto_fill(state, now, rng, fx)
 
 
 def _auto_fill(
-    state: DraftState, rng: random.Random, fx: list[Effect]
+    state: DraftState, now: float, rng: random.Random, fx: list[Effect]
 ) -> Transition:
     """Fill every empty slot with random pool players, free (rule #14)."""
     order = list(state.managers)
@@ -389,13 +409,11 @@ def _auto_fill(
         by_id[m.user_id] = cur
     state2 = replace(
         state,
-        phase="complete",
         managers=tuple(by_id[m.user_id] for m in state.managers),
         queue=tuple(queue),
         log=tuple(log),
-        pick_deadline=0.0,
     )
-    return state2, fx + [AutoFilledFx(tuple(assignments)), BoardFx(), CompleteFx()]
+    return _finish(state2, now, fx + [AutoFilledFx(tuple(assignments)), BoardFx()])
 
 
 # ---------------------------------------------------------------- free pick
@@ -425,9 +443,8 @@ def _pick(state: DraftState, ev: Pick, rng: random.Random) -> Transition:
         state3 = replace(state2, pick_deadline=deadline)
         return state3, fx + [ArmTimerFx("pick", -1, deadline)]
     if all(x.full for x in state2.managers):
-        state3 = replace(state2, phase="complete", pick_deadline=0.0)
-        return state3, fx + [CompleteFx()]
-    return _auto_fill(state2, rng, fx)
+        return _finish(state2, ev.now, fx)
+    return _auto_fill(state2, ev.now, rng, fx)
 
 
 def _pick_expired(
@@ -446,7 +463,19 @@ def _pick_expired(
             m = replace(m, autopilot=True)
             fx.append(AutopilotFx(m.user_id))
         managers.append(m)
-    return _auto_fill(replace(state, managers=tuple(managers)), rng, fx)
+    return _auto_fill(replace(state, managers=tuple(managers)), ev.now, rng, fx)
+
+
+# ------------------------------------------------------------------- lineup
+
+
+def _lineup_expired(state: DraftState, ev: TimerExpired) -> Transition:
+    # Stale guard, same shape as "pick": phase + deadline echo must match.
+    if state.phase != "lineup" or ev.deadline != state.lineup_deadline:
+        return state, []
+    state2 = replace(state, phase="complete", lineup_deadline=0.0)
+    # No BoardFx needed: the complete render reposts the final board itself.
+    return state2, [CompleteFx()]
 
 
 # ---------------------------------------------------------------- utilities
@@ -456,7 +485,7 @@ def _swap(state: DraftState, ev: Swap) -> Transition:
     m = state.manager(ev.user_id)
     if m is None:
         return _err(state, ev.user_id, "You're not in this draft.")
-    if state.phase not in ("auction", "free_pick"):
+    if state.phase not in ("auction", "free_pick", "lineup"):
         return _err(state, ev.user_id, "You can only swap during the draft.")
     slots = state.config.slots
     if ev.slot_a not in slots or ev.slot_b not in slots or ev.slot_a == ev.slot_b:
@@ -477,6 +506,10 @@ def _swap(state: DraftState, ev: Swap) -> Transition:
 def _pause(state: DraftState, ev: Pause) -> Transition:
     if ev.user_id != state.commissioner_id:
         return _err(state, ev.user_id, "Only the commissioner can pause.")
+    if state.phase == "lineup":
+        return _err(
+            state, ev.user_id, "The draft is wrapping up — lineups lock shortly."
+        )
     if state.phase not in ("auction", "free_pick"):
         return _err(state, ev.user_id, "There's nothing to pause.")
     if state.paused:
@@ -494,6 +527,10 @@ def _pause(state: DraftState, ev: Pause) -> Transition:
 def _resume(state: DraftState, ev: Resume) -> Transition:
     if ev.user_id != state.commissioner_id:
         return _err(state, ev.user_id, "Only the commissioner can resume.")
+    if state.phase == "lineup":
+        return _err(
+            state, ev.user_id, "The draft is wrapping up — lineups lock shortly."
+        )
     if not state.paused:
         return _err(state, ev.user_id, "The draft isn't paused.")
     deadline = ev.now + state.pause_remaining

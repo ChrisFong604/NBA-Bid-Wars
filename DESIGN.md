@@ -99,6 +99,17 @@ an LLM ranking) and crowns a champion.
     commissioner can `/draft kick @user [replace:@user2]` — a replacement
     inherits roster and budget verbatim.
 
+### The lineup window
+When the last roster fills — by sale, force-assign, free pick, or auto-fill —
+the draft doesn't complete instantly: it enters a ~60s **arrange-your-lineup**
+phase (`Config.lineup_seconds`, default 60; 0 skips it). A thread message
+with a persistent **🔀 Arrange my lineup** button opens each manager an
+ephemeral two-select panel ("Move this player" / "…into this slot") that
+dispatches the same `Swap` event as `/swap` — both work for the whole window.
+Bids/picks are over, and pause/resume are rejected ("the draft is wrapping
+up"). When the lineup timer fires, the draft completes and the sim
+prompt/results go out with the **final** lineups.
+
 ### The winner — tournament sim
 17. When the draft completes (sim mode ≠ `off`), the bot ranks every roster by
     prime stats; in `ai` mode one LLM call adds a second ranking blended
@@ -284,6 +295,7 @@ DEFAULTS = dict(
     pass_rule="pass_once",   # or "recycle_forever" if the group insists
     placement="any",
     afk_lots=10, free_pick_seconds=60,
+    lineup_seconds=60,       # arrange-your-lineup window before completion; 0 skips it
     sim="ai",                # "off" | "stats" | "ai"
 )
 ```

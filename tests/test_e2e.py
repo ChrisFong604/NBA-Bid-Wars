@@ -25,6 +25,7 @@ from draftbot.models import (
     ForceAssignedFx,
     FreePickFx,
     Join,
+    LineupPhaseFx,
     PassedFx,
     Pause,
     Pick,
@@ -33,6 +34,7 @@ from draftbot.models import (
     Resume,
     SoldFx,
     Start,
+    Swap,
     TimerExpired,
 )
 
@@ -74,6 +76,11 @@ def assert_invariants(state: DraftState) -> None:
         assert remaining == empties, (
             "players remaining (queue + live lot + free-pick pool) != "
             "total empty slots across all managers"
+        )
+    if state.phase == "lineup":
+        assert all(m.full for m in state.managers), "lineup with empty slots"
+        assert not state.queue and state.lot is None, (
+            "leftover pool players in the lineup window"
         )
 
 
@@ -139,7 +146,7 @@ def run_random_draft(seed: int) -> DraftState:
             state, _ = engine.apply(
                 state, TimerExpired("lot", lot.seq, lot.deadline, now), rng
             )
-        else:  # free_pick
+        elif state.phase == "free_pick":
             if rng.random() < 0.8:
                 picker = state.active_managers[0]
                 pid = rng.choice(state.queue).id
@@ -152,6 +159,20 @@ def run_random_draft(seed: int) -> DraftState:
                     TimerExpired("pick", -1, state.pick_deadline, now),
                     rng,
                 )
+        else:  # lineup — a swap or two, then the window locks
+            if rng.random() < 0.7:
+                m = rng.choice(state.managers)
+                slot_a, slot_b = rng.sample(SLOTS, 2)
+                state, _ = engine.apply(
+                    state, Swap(m.user_id, slot_a, slot_b), rng
+                )
+                assert_invariants(state)
+            now = max(now, state.lineup_deadline)
+            state, _ = engine.apply(
+                state,
+                TimerExpired("lineup", -1, state.lineup_deadline, now),
+                rng,
+            )
         assert_invariants(state)
     return state
 
@@ -263,11 +284,31 @@ def test_scripted_broke_freepick_pause_resume():
             )
         now += 10.0
 
-    # Roster full -> broke teams auto-fill free -> complete.
+    # Roster full -> broke teams auto-fill free -> lineup window opens.
     filled = next(f for f in fx if isinstance(f, AutoFilledFx))
     assert len(filled.assignments) == 3 * 4  # m1/m2/m3, 4 empty slots each
-    assert any(isinstance(f, CompleteFx) for f in fx)
+    assert state.phase == "lineup"
+    assert not any(isinstance(f, CompleteFx) for f in fx)  # not complete yet
+    lineup = next(f for f in fx if isinstance(f, LineupPhaseFx))
+    arm = next(f for f in fx if isinstance(f, ArmTimerFx))
+    assert (arm.kind, arm.lot_seq, arm.deadline) == ("lineup", -1, lineup.deadline)
+    assert state.lineup_deadline == lineup.deadline
     assert len(state.queue) == 0  # zero leftovers: every pool player placed
+
+    # Managers can rearrange slots during the window; players are preserved.
+    before = Counter(s.player.id for s in state.manager(4).spots)
+    state, fx = engine.apply(state, Swap(4, "PG", "C"), rng)
+    assert Counter(s.player.id for s in state.manager(4).spots) == before
+
+    # The window closes -> complete, with the final (swapped) lineups.
+    state, fx = engine.apply(
+        state,
+        TimerExpired(
+            "lineup", -1, state.lineup_deadline, state.lineup_deadline
+        ),
+        rng,
+    )
+    assert any(isinstance(f, CompleteFx) for f in fx)
     assert_complete_and_consistent(state)
     assert [state.manager(u).budget for u in (1, 2, 3, 4)] == [0, 0, 0, 20]
     assert Counter(e.kind for e in state.log) == Counter(
@@ -308,7 +349,8 @@ def test_narrow_era_draft_completes_with_only_in_era_players():
     way /draft start does (inclusive decade anchors): the draft runs to
     completion and every roster spot holds a 1990s player."""
     rng = random.Random(5)
-    config = Config(era_start=1990, era_end=1990, afk_lots=1_000)
+    # lineup_seconds=0 also covers the skip-the-window fast path end to end.
+    config = Config(era_start=1990, era_end=1990, afk_lots=1_000, lineup_seconds=0)
     eligible = tuple(
         p
         for p in _synthetic_era_players()
@@ -422,6 +464,14 @@ def test_all_pass_draft_force_assigns_within_reveal_bound():
     assert picker.empty_slots == 1
     state, fx = engine.apply(
         state, Pick(picker.user_id, state.queue[0].id, state.pick_deadline - 1.0),
+        rng,
+    )
+    # The final pick opens the lineup window; completion follows the timer.
+    assert any(isinstance(f, LineupPhaseFx) for f in fx)
+    assert state.phase == "lineup"
+    state, fx = engine.apply(
+        state,
+        TimerExpired("lineup", -1, state.lineup_deadline, state.lineup_deadline),
         rng,
     )
     assert any(isinstance(f, CompleteFx) for f in fx)

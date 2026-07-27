@@ -18,6 +18,7 @@ DYNAMIC_CASES = [
     (ui.LeaveButton, (123,)),
     (ui.QuickBidButton, (123, 7, 5)),
     (ui.CustomBidButton, (123, 7)),
+    (ui.LineupButton, (123,)),
 ]
 
 
@@ -52,6 +53,7 @@ def test_persistent_views_never_time_out():
     # The default View(timeout=180) would silently kill buttons mid-auction.
     assert ui.lobby_view(1).timeout is None
     assert ui.bid_view(1, 2, (1, 2, 5)).timeout is None
+    assert ui.lineup_view(1).timeout is None
 
 
 def test_bid_view_layout():
@@ -183,6 +185,57 @@ def test_teams_for_sim_carries_decade_and_prime():
 
 def test_config_default_sim_is_prompt():
     assert Config().sim == "prompt"
+
+
+# ------------------------------------------------------------------- lineup
+
+
+def _full_manager() -> Manager:
+    """Five filled slots; Jordan sits out of position at PG."""
+    others = tuple(
+        Spot(
+            slot=s,
+            player=Player(
+                id=f"q{s}", name=f"{s} Guy", team="TST", pos=s,
+                ppg=10.0, rpg=4.0, apg=3.0, stars=3, decade=2000, prime="x",
+            ),
+            price=1,
+        )
+        for s in ("SG", "SF", "PF", "C")
+    )
+    return Manager(
+        user_id=1, name="Chris", budget=5,
+        spots=(Spot(slot="PG", player=JORDAN, price=7),) + others,
+    )
+
+
+def test_lineup_open_embed_has_both_timestamp_forms():
+    # Mobile clients don't tick <t:..:R>, so :T must appear alongside it.
+    embed = ui.lineup_open_embed(1000.0)
+    assert embed.title == "🔀 Lineups open — all rosters are full!"
+    assert "<t:1000:R>" in embed.description
+    assert "<t:1000:T>" in embed.description
+
+
+def test_lineup_panel_embed_shows_all_five_slots_and_lock_clock():
+    lines = ui.lineup_panel_embed(_full_manager(), 1000.0).description.split("\n")
+    assert lines[0] == "**PG** — Michael Jordan (natural SG, '90s)"
+    slot_lines = [line for line in lines if line.startswith("**")]
+    assert [line.split("**")[1] for line in slot_lines] == ["PG", "SG", "SF", "PF", "C"]
+    # Mobile clients don't tick <t:..:R> — the absolute :T form must be there.
+    assert "<t:1000:R>" in lines[-1] and "<t:1000:T>" in lines[-1]
+
+
+def test_lineup_panel_view_selects():
+    view = ui.LineupPanelView(123, 1, _full_manager())
+    assert view.timeout == 90  # ephemeral panel — must NOT be persistent
+    assert [o.value for o in view.move_select.options] == list(
+        ("PG", "SG", "SF", "PF", "C")
+    )
+    assert view.move_select.options[0].label == "Jordan (natural SG)"
+    assert [o.value for o in view.into_select.options] == list(
+        ("PG", "SG", "SF", "PF", "C")
+    )
 
 
 def test_prompt_messages_short_text_is_one_fenced_message():

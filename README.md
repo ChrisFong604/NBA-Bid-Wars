@@ -22,7 +22,9 @@ spectator whose empty slots fill for free at the end; outlast everyone else
 with money and you get free picks from the fully revealed pool. Any player
 can occupy any lineup slot (`/swap` rearranges yours), and rosters/budgets
 are always public on the board, which is reposted at the bottom of the
-thread after every sale — no scrolling up.
+thread after every sale — no scrolling up. When the last roster fills,
+everyone gets ~60s to arrange their lineup — tap **🔀 Arrange my lineup** or
+use `/swap` — then lineups lock and the sim runs on the final arrangements.
 
 ## Setup
 
@@ -106,7 +108,8 @@ private GitHub repo, clone with a fine-grained token URL
 
 1. `/draft create` in a text channel — options: `budget` (default $20),
    `clock` (15–300s each player stays on the block — flat, bids don't extend
-   it; default 30), `sim` (**Prompt for your own LLM** / **Off** /
+   it; default 30), `lineup` (0–300s to arrange lineups after the last
+   roster fills; default 60, 0 skips the window), `sim` (**Prompt for your own LLM** / **Off** /
    **Stats only** / **AI + stats**; default Prompt — a copy-pastable prompt
    you run in your own LLM), and an era range (`era_from` / `era_to`, decade choices from
    **1960s** to **2020s**; default is all eras). Only players whose prime
@@ -121,7 +124,12 @@ private GitHub repo, clone with a fine-grained token URL
    when the flat clock expires pays and the player slots into their team.
 5. The last manager with money left picks the rest of their roster free via
    `/pick` (with autocomplete); everyone else's empty slots auto-fill.
-6. When every roster is full, the default **Prompt** mode posts a
+6. When the last roster fills, everyone gets ~60s to arrange their lineup —
+   tap **🔀 Arrange my lineup** (an ephemeral panel with two selects: move
+   this player… into this slot) or use `/swap`; then lineups lock and the
+   sim prompt drops. Set `lineup: 0` at creation to skip straight to the
+   results.
+7. When every roster is full, the default **Prompt** mode posts a
    copy-pastable prompt — paste it into your favorite LLM (ChatGPT, Claude,
    Gemini) and it runs the tournament for you; no API key, no cost. The
    bot-run modes post the standings and a champion directly: stats-only

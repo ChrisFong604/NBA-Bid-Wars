@@ -19,6 +19,7 @@ from draftbot.models import (
     Pick,
     Resume,
     Start,
+    Swap,
     TimerExpired,
 )
 from helpers import make_players
@@ -52,6 +53,12 @@ def assert_invariants(state: DraftState) -> None:
         assert state.lot is not None
     if state.phase == "free_pick":
         assert len(state.active_managers) <= 1, "free_pick with 2+ actives"
+    if state.phase == "lineup":
+        assert all(m.full for m in state.managers), "lineup with empty slots"
+        assert not state.queue and state.lot is None, (
+            "leftover pool players in the lineup window"
+        )
+        assert state.lineup_deadline > 0.0
     if state.phase == "complete":
         assert all(m.full for m in state.managers)
         assert not state.queue and state.lot is None, (
@@ -76,7 +83,7 @@ def play_draft(seed: int, n: int) -> None:
     step(Start(1, PLAYERS, now))
     max_lots = 2 * (len(cfg.slots) * n)
     guard = 0
-    while state.phase in ("auction", "free_pick"):
+    while state.phase in ("auction", "free_pick", "lineup"):
         guard += 1
         assert guard < 5_000, "draft did not terminate"
         now += 1.0
@@ -103,7 +110,7 @@ def play_draft(seed: int, n: int) -> None:
             deadline = state.lot.deadline
             now = max(now, deadline)
             step(TimerExpired("lot", state.lot.seq, deadline, now))
-        else:  # free_pick
+        elif state.phase == "free_pick":
             if agent.random() < 0.1:  # reclaim attempts must never add actives
                 step(Join(agent.randrange(1, n + 1), "back"))
             actives = state.active_managers
@@ -116,6 +123,17 @@ def play_draft(seed: int, n: int) -> None:
                 step(Pick(actives[0].user_id, "not-a-player", now))
             else:
                 step(Pick(actives[0].user_id, agent.choice(state.queue).id, now))
+        else:  # lineup — swaps allowed, pause rejected, then the window locks
+            if agent.random() < 0.5:
+                uid = agent.choice([*range(1, n + 1), 999])
+                a, b = agent.sample(cfg.slots, 2)
+                step(Swap(uid, a, b))
+            if agent.random() < 0.2:  # pause is rejected, state untouched
+                step(Pause(1, now))
+            if agent.random() < 0.2:  # stale-deadline fire must be a no-op
+                step(TimerExpired("lineup", -1, state.lineup_deadline - 5.0, now))
+            now = max(now, state.lineup_deadline)
+            step(TimerExpired("lineup", -1, state.lineup_deadline, now))
     assert state.phase == "complete"
     assert all(m.full for m in state.managers)
     assert state.lot_seq <= max_lots, "reveal bound exceeded"

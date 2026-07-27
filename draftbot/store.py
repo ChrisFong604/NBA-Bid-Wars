@@ -106,6 +106,8 @@ def state_from_dict(d: dict[str, Any]) -> DraftState:
         lot=_lot(d["lot"]),
         lot_seq=d["lot_seq"],
         pick_deadline=d["pick_deadline"],
+        # Pre-lineup-phase snapshots omit the key; default matches the field.
+        lineup_deadline=d.get("lineup_deadline", 0.0),
         log=tuple(_log_entry(e) for e in d["log"]),
         paused=d["paused"],
         pause_remaining=d["pause_remaining"],

@@ -42,6 +42,7 @@ class Config:
     pass_rule: str = "pass_once"  # or "recycle_forever"
     afk_lots: int = 10
     free_pick_seconds: int = 60
+    lineup_seconds: int = 60  # arrange-your-lineup window before completion; 0 skips it
     sim: str = "prompt"  # "prompt" (copy-paste prompt for your own LLM, default)
     # | "off" | "stats" (pure stat ranking) | "ai" (stats + weighted LLM ranking)
 
@@ -93,13 +94,14 @@ class LogEntry:
 class DraftState:
     config: Config
     commissioner_id: int
-    phase: str = "lobby"  # lobby | auction | free_pick | complete | cancelled
+    phase: str = "lobby"  # lobby | auction | free_pick | lineup | complete | cancelled
     managers: tuple[Manager, ...] = ()
     queue: tuple[Player, ...] = ()  # hidden upcoming players; head is next up
     passed_ids: frozenset = field(default_factory=frozenset)  # passed once
     lot: Lot | None = None
     lot_seq: int = 0  # last dealt lot number (1-based)
     pick_deadline: float = 0.0  # free-pick phase only
+    lineup_deadline: float = 0.0  # lineup phase only
     log: tuple[LogEntry, ...] = ()
     paused: bool = False
     pause_remaining: float = 0.0
@@ -158,7 +160,7 @@ class TimerExpired:
     was armed with — the engine ignores the event unless it matches current
     state (stale-timer guard)."""
 
-    kind: str  # "lot" | "pick"
+    kind: str  # "lot" | "pick" | "lineup"
     lot_seq: int  # -1 for kind="pick"
     deadline: float
     now: float
@@ -263,14 +265,19 @@ class AutoFilledFx:
 
 
 @dataclass(frozen=True)
+class LineupPhaseFx:  # all rosters full — arrange-lineup window is open
+    deadline: float
+
+
+@dataclass(frozen=True)
 class CompleteFx:
     pass
 
 
 @dataclass(frozen=True)
 class ArmTimerFx:
-    kind: str  # "lot" | "pick"
-    lot_seq: int  # -1 for kind="pick"
+    kind: str  # "lot" | "pick" | "lineup"
+    lot_seq: int  # -1 for kind="pick" / "lineup"
     deadline: float
 
 
@@ -317,7 +324,7 @@ class LobbyFx:  # lobby membership changed; re-render the lobby message
 
 Effect = (
     LotOpened | BidPlaced | SoldFx | PassedFx | ForceAssignedFx | FreePickFx
-    | PickedFx | AutoFilledFx | CompleteFx | ArmTimerFx | CancelTimerFx
-    | BoardFx | ErrorFx | AutopilotFx | PausedFx | ResumedFx | CancelledFx
-    | LobbyFx
+    | PickedFx | AutoFilledFx | LineupPhaseFx | CompleteFx | ArmTimerFx
+    | CancelTimerFx | BoardFx | ErrorFx | AutopilotFx | PausedFx | ResumedFx
+    | CancelledFx | LobbyFx
 )

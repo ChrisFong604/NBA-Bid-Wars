@@ -25,6 +25,7 @@ from draftbot.models import (
     Join,
     Kick,
     Leave,
+    LineupPhaseFx,
     LobbyFx,
     Lot,
     LotOpened,
@@ -360,7 +361,7 @@ def test_one_active_manager_enters_free_pick():
     assert ArmTimerFx("pick", -1, free.deadline) in fx
 
 
-def test_zero_active_managers_auto_fills_to_complete():
+def test_zero_active_managers_auto_fills_then_lineup_then_complete():
     a = make_manager(1, CFG, filled=4, budget=5)       # buys last slot below
     b = make_manager(2, CFG, autopilot=True)           # 5 empties
     player = px("onblock")
@@ -372,15 +373,24 @@ def test_zero_active_managers_auto_fills_to_complete():
     state2, fx = engine.apply(
         state, TimerExpired("lot", 3, 2000.0, 2000.0), random.Random(1)
     )
-    assert state2.phase == "complete"
+    assert state2.phase == "lineup"  # full rosters open the lineup window
     assert all(m.full for m in state2.managers)
     assert state2.manager(1).budget == 0
     filled = fx_of(fx, AutoFilledFx)[0]
     assert len(filled.assignments) == 5
     assert all(mid == 2 for mid, _ in filled.assignments)
-    assert fx_of(fx, CompleteFx)
+    deadline = 2000.0 + CFG.lineup_seconds
+    assert fx_of(fx, LineupPhaseFx) == [LineupPhaseFx(deadline)]
+    assert ArmTimerFx("lineup", -1, deadline) in fx
+    assert not fx_of(fx, CompleteFx)  # completion waits for the window
+    assert state2.lineup_deadline == deadline
     assert len(state2.queue) == 8 - 5
     assert sum(1 for e in state2.log if e.kind == "autofill") == 5
+    state3, fx3 = engine.apply(
+        state2, TimerExpired("lineup", -1, deadline, deadline), random.Random(1)
+    )
+    assert state3.phase == "complete" and state3.lineup_deadline == 0.0
+    assert fx3 == [CompleteFx()]
 
 
 # ---------------------------------------------------------------- free pick
@@ -424,11 +434,19 @@ def test_pick_until_full_auto_fills_everyone_else():
     state2, fx = engine.apply(
         state, Pick(1, state.queue[0].id, 4000.0), random.Random(2)
     )
-    assert state2.phase == "complete"
+    assert state2.phase == "lineup"
     assert all(m.full for m in state2.managers)
     filled = fx_of(fx, AutoFilledFx)[0]
     assert [mid for mid, _ in filled.assignments] == [2]
-    assert fx_of(fx, CompleteFx)
+    deadline = 4000.0 + CFG.lineup_seconds
+    assert fx_of(fx, LineupPhaseFx) == [LineupPhaseFx(deadline)]
+    assert ArmTimerFx("lineup", -1, deadline) in fx
+    assert not fx_of(fx, CompleteFx)
+    assert state2.pick_deadline == 0.0
+    state3, fx3 = engine.apply(
+        state2, TimerExpired("lineup", -1, deadline, deadline)
+    )
+    assert state3.phase == "complete" and fx3 == [CompleteFx()]
 
 
 def test_free_pick_reclaim_that_would_add_second_active_rejected():
@@ -495,11 +513,140 @@ def test_pick_timeout_flips_picker_and_auto_fills():
         state, TimerExpired("pick", -1, 5000.0, 6000.0), random.Random(3)
     )
     assert AutopilotFx(1) in fx
-    assert state2.phase == "complete"
+    assert state2.phase == "lineup"
     assert all(m.full for m in state2.managers)
     assert state2.manager(1).autopilot
     filled = fx_of(fx, AutoFilledFx)[0]
     assert len(filled.assignments) == 2 + 1  # picker's 2 empties + other's 1
+    assert fx_of(fx, LineupPhaseFx) == [LineupPhaseFx(6000.0 + CFG.lineup_seconds)]
+    state3, _ = engine.apply(
+        state2,
+        TimerExpired("lineup", -1, state2.lineup_deadline, state2.lineup_deadline),
+    )
+    assert state3.phase == "complete"
+
+
+# ------------------------------------------------------------------- lineup
+
+
+def lineup_state() -> DraftState:
+    a = make_manager(1, CFG, filled=5)
+    b = make_manager(2, CFG, filled=5)
+    return DraftState(
+        config=CFG, commissioner_id=1, phase="lineup",
+        managers=(a, b), lot_seq=9, lineup_deadline=5000.0,
+    )
+
+
+def test_last_sale_enters_lineup_phase():
+    a = make_manager(1, CFG, filled=4)
+    b = make_manager(2, CFG, filled=5)
+    player = px("last")
+    lot = Lot(
+        seq=9, player=player, last_call=False,
+        current_bid=3, leader_id=1, deadline=2000.0,
+    )
+    state = auction_state(CFG, (a, b), (), lot)
+    state2, fx = engine.apply(state, TimerExpired("lot", 9, 2000.0, 2000.0))
+    assert state2.phase == "lineup"
+    deadline = 2000.0 + CFG.lineup_seconds
+    assert state2.lineup_deadline == deadline
+    assert fx == [
+        SoldFx(player, 1, 3), BoardFx(),
+        LineupPhaseFx(deadline), ArmTimerFx("lineup", -1, deadline),
+    ]
+
+
+def test_final_pick_enters_lineup_phase():
+    state = free_pick_state(picker_filled=4, other_filled=5)
+    target = state.queue[0]
+    state2, fx = engine.apply(state, Pick(1, target.id, 4000.0))
+    assert state2.phase == "lineup"
+    assert state2.pick_deadline == 0.0
+    deadline = 4000.0 + CFG.lineup_seconds
+    assert state2.lineup_deadline == deadline
+    assert fx == [
+        PickedFx(target, 1), BoardFx(),
+        LineupPhaseFx(deadline), ArmTimerFx("lineup", -1, deadline),
+    ]
+
+
+def test_lineup_seconds_zero_skips_the_window():
+    cfg = Config(lineup_seconds=0)
+    a = make_manager(1, cfg, filled=4)
+    b = make_manager(2, cfg, filled=5)
+    player = px("last")
+    lot = Lot(
+        seq=9, player=player, last_call=False,
+        current_bid=3, leader_id=1, deadline=2000.0,
+    )
+    state = auction_state(cfg, (a, b), (), lot)
+    state2, fx = engine.apply(state, TimerExpired("lot", 9, 2000.0, 2000.0))
+    assert state2.phase == "complete" and state2.lineup_deadline == 0.0
+    assert fx == [SoldFx(player, 1, 3), BoardFx(), CompleteFx()]
+
+
+def test_lineup_timer_fires_completes_draft():
+    state = lineup_state()
+    state2, fx = engine.apply(state, TimerExpired("lineup", -1, 5000.0, 5000.0))
+    assert state2.phase == "complete" and state2.lineup_deadline == 0.0
+    assert fx == [CompleteFx()]
+
+
+def test_stale_or_post_complete_lineup_timer_ignored():
+    state = lineup_state()
+    state2, fx = engine.apply(state, TimerExpired("lineup", -1, 4999.0, 6000.0))
+    assert state2 is state and fx == []  # deadline mismatch
+    done, _ = engine.apply(state, TimerExpired("lineup", -1, 5000.0, 5000.0))
+    done2, fx2 = engine.apply(done, TimerExpired("lineup", -1, 5000.0, 5001.0))
+    assert done2 is done and fx2 == []  # phase already complete
+
+
+def test_swap_works_during_lineup_and_preserves_players():
+    state = lineup_state()
+    before = sorted(s.player.id for s in state.manager(1).spots)
+    state2, fx = engine.apply(state, Swap(1, "PG", "C"))
+    assert fx == [BoardFx()]
+    m = state2.manager(1)
+    assert sorted(s.player.id for s in m.spots) == before  # same multiset
+    assert m.spots[0].player.id == "own-1-4"
+    assert m.spots[4].player.id == "own-1-0"
+
+
+def test_bid_and_pick_rejected_during_lineup():
+    state = lineup_state()
+    _, fx = engine.apply(state, Bid(1, 9, 4500.0, amount=5))
+    assert fx == [ErrorFx(1, "There's no auction running right now.")]
+    _, fx = engine.apply(state, Pick(1, "own-2-0", 4500.0))
+    assert fx == [ErrorFx(1, "There's no free-pick phase running.")]
+
+
+def test_pause_and_resume_rejected_during_lineup():
+    state = lineup_state()
+    msg = "The draft is wrapping up — lineups lock shortly."
+    state2, fx = engine.apply(state, Pause(1, 4500.0))
+    assert state2 is state and fx == [ErrorFx(1, msg)]
+    state2, fx = engine.apply(state, Resume(1, 4500.0))
+    assert state2 is state and fx == [ErrorFx(1, msg)]
+
+
+def test_cancel_during_lineup_cancels_everything():
+    state = lineup_state()
+    state2, fx = engine.apply(state, Cancel(1))
+    assert state2.phase == "cancelled"
+    assert fx == [CancelTimerFx(), CancelledFx()]
+
+
+def test_kick_during_lineup_documented_behavior():
+    # Kick keeps working in the lineup window: without a replacement it flags
+    # the (already full) team autopilot — harmless, nothing left to bid on —
+    # and the phase/deadline are untouched.
+    state = lineup_state()
+    state2, fx = engine.apply(state, Kick(1, target_id=2, now=4500.0))
+    assert state2.phase == "lineup"
+    assert state2.lineup_deadline == 5000.0
+    assert state2.manager(2).autopilot
+    assert AutopilotFx(2) in fx and fx_of(fx, BoardFx)
 
 
 # --------------------------------------------------------------------- swap

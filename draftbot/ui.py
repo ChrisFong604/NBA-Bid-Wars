@@ -31,6 +31,7 @@ from .models import (
     ErrorFx,
     ForceAssignedFx,
     FreePickFx,
+    LineupPhaseFx,
     LobbyFx,
     Lot,
     LotOpened,
@@ -41,6 +42,7 @@ from .models import (
     Player,
     ResumedFx,
     SoldFx,
+    Swap,
 )
 from .sim import LLM_WEIGHT, SimResult, TeamDict, share_prompt
 
@@ -374,6 +376,38 @@ def autofill_embed(assignments: tuple[tuple[int, Player], ...]) -> discord.Embed
     )
 
 
+def lineup_open_embed(deadline: float) -> discord.Embed:
+    # Both timestamp styles: :R ticks on desktop, :T is the absolute time
+    # for mobile clients that don't tick relative stamps.
+    return discord.Embed(
+        title="🔀 Lineups open — all rosters are full!",
+        description=(
+            "Every manager can rearrange who plays which slot — tap "
+            "**🔀 Arrange my lineup** below or use /swap. Lineups lock "
+            f"{rel(deadline)} (at <t:{int(deadline)}:T>), then the draft "
+            "wraps with your final lineups."
+        ),
+        color=BLUE,
+    )
+
+
+def lineup_panel_embed(m: Manager, deadline: float) -> discord.Embed:
+    lines = [
+        f"**{s.slot}** — {s.player.name} (natural {s.player.pos}, "
+        f"{decade_tag(s.player.decade)})"
+        for s in m.spots
+        if s.player is not None
+    ]
+    # Timestamps only render in descriptions/fields, never footers; :T is the
+    # mobile-accurate form since mobile clients don't tick :R.
+    lines.append(f"\n🔒 Lineups lock {rel(deadline)} (at <t:{int(deadline)}:T>)")
+    return discord.Embed(
+        title=f"🔀 {m.name} — arrange your lineup",
+        description="\n".join(lines),
+        color=BLUE,
+    )
+
+
 def complete_embed(state: DraftState) -> discord.Embed:
     embed = discord.Embed(title="🏁 Draft complete — final rosters", color=GOLD)
     for m in state.managers:
@@ -521,11 +555,28 @@ class CustomBidButton(
         )
 
 
+class LineupButton(
+    _FromIntGroups,
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"nba:lineup:(?P<thread>[0-9]+)",
+):
+    def __init__(self, thread_id: int) -> None:
+        super().__init__(_btn(
+            "🔀 Arrange my lineup", discord.ButtonStyle.primary,
+            f"nba:lineup:{thread_id}",
+        ))
+        self.thread_id = thread_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _bot(interaction).handle_lineup_panel(interaction, self.thread_id)
+
+
 DYNAMIC_ITEMS: tuple[type, ...] = (
     JoinButton,
     LeaveButton,
     QuickBidButton,
     CustomBidButton,
+    LineupButton,
 )
 
 
@@ -547,6 +598,84 @@ def bid_view(
         view.add_item(QuickBidButton(thread_id, lot_seq, increment))
     view.add_item(CustomBidButton(thread_id, lot_seq))
     return view
+
+
+def lineup_view(thread_id: int) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(LineupButton(thread_id))
+    return view
+
+
+class LineupPanelView(discord.ui.View):
+    """Ephemeral per-manager lineup panel — short-lived, NOT persistent.
+    Two selects; once both are chosen the Swap dispatches through the same
+    apply_event/render pipeline as /swap, then the panel is rebuilt fresh
+    (refreshed lineup, reset selects) so the manager can keep rearranging."""
+
+    def __init__(self, thread_id: int, user_id: int, manager: Manager) -> None:
+        super().__init__(timeout=90)
+        self.thread_id = thread_id
+        self.user_id = user_id
+        self.slot_a: str | None = None
+        self.slot_b: str | None = None
+        self.move_select: discord.ui.Select = discord.ui.Select(
+            placeholder="Move this player",
+            options=[
+                discord.SelectOption(
+                    label=f"{short_name(s.player.name)} (natural {s.player.pos})",
+                    value=s.slot,
+                )
+                for s in manager.spots
+                if s.player is not None
+            ],
+        )
+        self.into_select: discord.ui.Select = discord.ui.Select(
+            placeholder="…into this slot",
+            options=[
+                discord.SelectOption(label=s.slot, value=s.slot)
+                for s in manager.spots
+            ],
+        )
+        self.move_select.callback = self._on_move  # type: ignore[method-assign]
+        self.into_select.callback = self._on_into  # type: ignore[method-assign]
+        self.add_item(self.move_select)
+        self.add_item(self.into_select)
+
+    async def _on_move(self, interaction: discord.Interaction) -> None:
+        self.slot_a = self.move_select.values[0]
+        await self._maybe_swap(interaction)
+
+    async def _on_into(self, interaction: discord.Interaction) -> None:
+        self.slot_b = self.into_select.values[0]
+        await self._maybe_swap(interaction)
+
+    async def _maybe_swap(self, interaction: discord.Interaction) -> None:
+        if self.slot_a is None or self.slot_b is None:
+            await interaction.response.defer()  # wait for the other select
+            return
+        bot = _bot(interaction)
+        session = bot.sessions.get(self.thread_id)
+        if session is None:
+            await reply_ephemeral(interaction, bot.missing_session_message())
+            return
+        if session.state.phase != "lineup":
+            await reply_ephemeral(interaction, "The lineup window is closed.")
+            return
+        effects = await bot.apply_event(
+            session, Swap(self.user_id, self.slot_a, self.slot_b)
+        )
+        await bot.render(session, effects, interaction)
+        if interaction.response.is_done():
+            return  # an ErrorFx already replied; the lineup didn't change
+        manager = session.state.manager(self.user_id)
+        if manager is None:  # kicked+replaced mid-panel — nothing to show
+            await interaction.response.defer()
+            return
+        await interaction.response.edit_message(
+            embed=lineup_panel_embed(manager, session.state.lineup_deadline),
+            view=LineupPanelView(self.thread_id, self.user_id, manager),
+        )
+        self.stop()
 
 
 class CancelConfirmView(discord.ui.View):
@@ -686,6 +815,13 @@ async def _render_one(
             ).edit(content=pick_prompt(fx.manager_id, state.pick_deadline))
     elif isinstance(fx, AutoFilledFx):
         await session.thread.send(embed=autofill_embed(fx.assignments))
+    elif isinstance(fx, LineupPhaseFx):
+        # Fire-and-forget: the button is stateless via its custom_id, so no
+        # message id needs tracking — it keeps working across restarts.
+        await session.thread.send(
+            embed=lineup_open_embed(fx.deadline),
+            view=lineup_view(session.thread_id),
+        )
     elif isinstance(fx, CompleteFx):
         await _render_complete(bot, session, state)
     elif isinstance(fx, PausedFx):

@@ -433,6 +433,28 @@ class DraftBot(discord.Client):
             except discord.HTTPException:
                 log.debug("final bid ack failed", exc_info=True)
 
+    async def handle_lineup_panel(
+        self, interaction: discord.Interaction, thread_id: int
+    ) -> None:
+        """🔀 Arrange my lineup — send the caller their ephemeral panel."""
+        session = self.sessions.get(thread_id)
+        if session is None:
+            await _reply_ephemeral(interaction, self.missing_session_message())
+            return
+        state = session.state
+        if state.phase != "lineup":
+            await _reply_ephemeral(interaction, "The lineup window is closed.")
+            return
+        manager = state.manager(interaction.user.id)
+        if manager is None:
+            await _reply_ephemeral(interaction, "You're not in this draft.")
+            return
+        await interaction.response.send_message(
+            embed=ui.lineup_panel_embed(manager, state.lineup_deadline),
+            view=ui.LineupPanelView(thread_id, interaction.user.id, manager),
+            ephemeral=True,
+        )
+
     async def handle_cancel_confirm(
         self, interaction: discord.Interaction, thread_id: int
     ) -> None:
@@ -545,6 +567,21 @@ class DraftBot(discord.Client):
                     + ui.pick_prompt(actives[0].user_id, deadline)
                 )
                 session.pick_message_id = message.id
+        elif state.phase == "lineup":
+            # Same pattern as free_pick: a fresh full window from now, so an
+            # already-passed stored deadline just restarts the clock (the
+            # engine's deadline-echo guard makes any stray old fire a no-op).
+            deadline = now + state.config.lineup_seconds
+            async with session.lock:
+                session.state = replace(session.state, lineup_deadline=deadline)
+                self._arm_timer(session, "lineup", -1, deadline)
+                await self._save(session)
+            await session.thread.send(
+                "♻️ Bot restarted — lineups lock "
+                f"<t:{int(deadline)}:R>; tap the button or /swap to "
+                "rearrange yours.",
+                view=ui.lineup_view(session.thread_id),
+            )
         # lobby phase: nothing to re-arm; the lobby buttons are DynamicItems.
 
 
@@ -580,6 +617,7 @@ def register_commands(bot: DraftBot) -> None:
     @app_commands.describe(
         budget="Starting budget per manager (default $20)",
         clock="Seconds each player stays on the block — flat, bids don't extend it (default 30)",
+        lineup="Seconds to arrange lineups after the last roster fills — 0 skips it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
         sim="Post-draft tournament sim mode (default: prompt for your own LLM)",
@@ -598,6 +636,7 @@ def register_commands(bot: DraftBot) -> None:
         interaction: discord.Interaction,
         budget: app_commands.Range[int, 1, 1000] = 20,
         clock: app_commands.Range[int, 15, 300] = 30,
+        lineup: app_commands.Range[int, 0, 300] = 60,
         era_from: int = 1960,
         era_to: int = 2020,
         sim: str = "prompt",  # shadows the sim module only inside this closure
@@ -632,6 +671,7 @@ def register_commands(bot: DraftBot) -> None:
         config = Config(
             budget=budget,
             lot_seconds=clock,
+            lineup_seconds=lineup,
             era_start=era_from,
             era_end=era_to,
             sim=sim,
