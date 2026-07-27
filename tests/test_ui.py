@@ -170,6 +170,34 @@ def test_teams_for_sim_carries_decade_and_prime():
     assert player["prime"] == "1989–1993"
 
 
+def test_config_default_sim_is_prompt():
+    assert Config().sim == "prompt"
+
+
+def test_prompt_messages_short_text_is_one_fenced_message():
+    messages = ui.prompt_messages("paste me\ninto your LLM")
+    assert messages == ["```\npaste me\ninto your LLM\n```"]
+    assert len(messages[0]) < 2000
+
+
+def test_prompt_messages_long_text_splits_on_line_boundaries():
+    lines = [f"line {i:03d} " + "x" * 90 for i in range(50)]  # ~5,000 chars
+    text = "\n".join(lines)
+    messages = ui.prompt_messages(text)
+    assert len(messages) > 1
+    bodies = []
+    for i, message in enumerate(messages, 1):
+        assert len(message) < 2000
+        assert message.count("```") == 2  # balanced fences in every chunk
+        marker, fenced = message.split("\n", 1)
+        assert marker == f"(part {i}/{len(messages)})"
+        assert fenced.startswith("```\n") and fenced.endswith("\n```")
+        bodies.append(fenced[4:-4])
+    # Re-joining the fenced bodies rebuilds the text exactly — every split
+    # landed on a line boundary and nothing was lost.
+    assert "\n".join(bodies) == text
+
+
 def test_bot_module_imports_without_any_token():
     env = {
         k: v

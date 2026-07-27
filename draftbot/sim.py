@@ -1,6 +1,9 @@
 """Post-draft simulation (DESIGN.md section 5).
 
-Two modes. ``stats``: no network — every player scores
+``prompt`` (the default) needs no network at all: ``share_prompt`` builds a
+copy-pastable prompt the players run in their own chat LLM.
+
+Two bot-run modes. ``stats``: no network — every player scores
 ``4*stars + 0.35*ppg + 0.5*rpg + 0.7*apg`` (era-relative stars primary, prime
 stats secondary), a team is the sum of its players, best total wins. ``ai``:
 the stats ranking PLUS one request to an OpenAI-compatible chat endpoint —
@@ -138,6 +141,42 @@ async def run_ai(teams: list[TeamDict]) -> SimResult:
         standings=tuple((name, final[name]) for name in ordered),
         champion=ordered[0],
         summary=verdict.summary,
+    )
+
+
+def share_prompt(teams: list[TeamDict]) -> str:
+    """Copy-pastable tournament prompt for a human's own chat LLM.
+
+    Pure text for ChatGPT/Claude/Gemini — deliberately no structured-output
+    language; the reader's LLM plays the tournament, not this bot.
+    """
+    _team_names(teams)
+    rosters = "\n\n".join(_roster_block(t) for t in teams)
+    return (
+        f"{len(teams)} fantasy teams were just drafted in a blind-auction NBA\n"
+        "draft. Each team has five lineup slots (PG/SG/SF/PF/C), and the\n"
+        "team names are the managers who drafted them.\n"
+        "\n"
+        "Every player competes AT THEIR PRIME: primes face primes across\n"
+        "eras — 1991 Jordan takes the floor against 2016 Curry. Each\n"
+        "player's stats are prime-years ppg/rpg/apg from their own era, plus\n"
+        "a 1-5 era-relative star rating. A player's natural position may\n"
+        "differ from the slot they occupy — out-of-position play is legal\n"
+        "and should flavor the games. When rosters mix eras, weigh the style\n"
+        "clashes — pace, spacing, hand-checking, three-point volume.\n"
+        "\n"
+        f"TEAMS\n{rosters}\n"
+        "\n"
+        "INSTRUCTIONS\n"
+        "Choose whatever tournament format you think is fairest and most fun\n"
+        "for this many teams — round-robin for small fields, a seeded\n"
+        "knockout for larger ones, your call. Play every game out with\n"
+        "realistic NBA scores (no ties). Write a vivid 2-3 sentence recap\n"
+        "per game naming actual players. Crown a champion and a tournament\n"
+        "MVP (an individual player). Finish with final standings and a\n"
+        "short punchy summary.\n"
+        "\n"
+        "Run the full simulation now."
     )
 
 

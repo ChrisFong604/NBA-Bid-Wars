@@ -351,6 +351,36 @@ def test_json_wrapped_in_prose_parses(monkeypatch):
     assert result.summary == canned.summary
 
 
+# ------------------------------------------------------------ share prompt
+
+
+def test_share_prompt_contains_teams_players_and_prime_framing():
+    teams = _teams(4)
+    prompt = sim.share_prompt(teams)
+    for team in teams:
+        assert team["manager"] in prompt
+        for player in team["players"]:
+            assert player["name"] in prompt
+    assert "AT THEIR PRIME" in prompt
+
+
+def test_share_prompt_instructions_and_ending():
+    prompt = sim.share_prompt(_teams(3))
+    assert "Choose whatever tournament format" in prompt
+    assert prompt.endswith("Run the full simulation now.")
+
+
+def test_share_prompt_has_no_structured_output_language():
+    prompt = sim.share_prompt(_teams(3))
+    assert "JSON" not in prompt
+    assert "schema" not in prompt
+
+
+def test_share_prompt_fewer_than_two_teams_raises():
+    with pytest.raises(SimError, match="at least two"):
+        sim.share_prompt(_teams(1))
+
+
 # ------------------------------------------------------- failure handling
 
 

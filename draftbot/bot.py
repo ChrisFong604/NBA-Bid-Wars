@@ -306,6 +306,10 @@ class DraftBot(discord.Client):
 
     async def _run_sim(self, session: DraftSession) -> None:
         mode = session.state.config.sim
+        if mode == "prompt":
+            # No network, no key — /simulate just re-posts the paste-me prompt.
+            await ui.send_share_prompt(session, session.state)
+            return
         note = ""
         if mode == "ai" and not os.environ.get("LLM_API_KEY"):
             mode, note = "stats", "no LLM key — stats-only ranking"
@@ -553,12 +557,13 @@ def register_commands(bot: DraftBot) -> None:
         clock="Seconds each player stays on the block — flat, bids don't extend it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
-        sim="Post-draft tournament sim mode (default off)",
+        sim="Post-draft tournament sim mode (default: prompt for your own LLM)",
     )
     @app_commands.choices(
         era_from=era_choices,
         era_to=era_choices,
         sim=[
+            app_commands.Choice(name="Prompt for your own LLM", value="prompt"),
             app_commands.Choice(name="Off", value="off"),
             app_commands.Choice(name="Stats only", value="stats"),
             app_commands.Choice(name="AI + stats", value="ai"),
@@ -570,7 +575,7 @@ def register_commands(bot: DraftBot) -> None:
         clock: app_commands.Range[int, 15, 300] = 60,
         era_from: int = 1960,
         era_to: int = 2020,
-        sim: str = "off",  # shadows the sim module only inside this closure
+        sim: str = "prompt",  # shadows the sim module only inside this closure
     ) -> None:
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):

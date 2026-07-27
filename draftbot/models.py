@@ -42,7 +42,8 @@ class Config:
     pass_rule: str = "pass_once"  # or "recycle_forever"
     afk_lots: int = 10
     free_pick_seconds: int = 60
-    sim: str = "off"  # "off" | "stats" (pure stat ranking) | "ai" (stats + weighted LLM ranking)
+    sim: str = "prompt"  # "prompt" (copy-paste prompt for your own LLM, default)
+    # | "off" | "stats" (pure stat ranking) | "ai" (stats + weighted LLM ranking)
 
 
 @dataclass(frozen=True)

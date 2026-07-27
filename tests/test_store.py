@@ -68,7 +68,7 @@ def test_old_style_config_snapshot_loads(tmp_path):
     assert loaded.config.sim == "ai"  # True -> "ai"
     assert not hasattr(loaded.config, "pool_extra")
     # everything else survives untouched (sim True coerces to "ai", which
-    # differs from the fresh-Config default of "off")
+    # differs from the fresh-Config default of "prompt")
     expected = dataclasses.replace(
         state, config=dataclasses.replace(state.config, sim="ai")
     )

@@ -41,7 +41,7 @@ from .models import (
     ResumedFx,
     SoldFx,
 )
-from .sim import LLM_WEIGHT, SimResult, TeamDict
+from .sim import LLM_WEIGHT, SimResult, TeamDict, share_prompt
 
 if TYPE_CHECKING:
     from .bot import DraftBot, DraftSession
@@ -64,7 +64,17 @@ LOT_FOOTER = (
     "flat clock — bids never add time · bid up to your full remaining "
     "budget; hit $0 and you're done bidding"
 )
-SIM_LABELS = {"off": "off", "stats": "stats only", "ai": "AI + stats"}
+SIM_LABELS = {
+    "prompt": "prompt for your own LLM",
+    "off": "off",
+    "stats": "stats only",
+    "ai": "AI + stats",
+}
+SHARE_PROMPT_HEADER = (
+    "🎟️ Draft complete — paste this into your favorite LLM to run the tournament:"
+)
+PROMPT_MESSAGE_LIMIT = 1900  # headroom under Discord's 2000-char cap
+_PROMPT_OVERHEAD = 30  # "(part i/N)" marker line + the two fence lines
 LAST_CALL_WARNING = "LAST CALL — passes again and they're force-assigned for $1"
 
 _NAME_SUFFIXES = frozenset({"Jr.", "Sr.", "II", "III", "IV", "V"})
@@ -134,6 +144,37 @@ def _roster_lines(m: Manager) -> str:
 
 def pool_count(state: DraftState) -> int:
     return len(state.queue) + (1 if state.lot is not None else 0)
+
+
+def prompt_messages(text: str) -> list[str]:
+    """Fence ``text`` for Discord, splitting on line boundaries so every
+    message stays under the 2000-char cap. Multi-part messages start with a
+    ``(part i/N)`` marker line above the fence; single-part is just the
+    fenced block."""
+    budget = PROMPT_MESSAGE_LIMIT - _PROMPT_OVERHEAD
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+        if current and len(candidate) > budget:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    chunks.append(current)
+    if len(chunks) == 1:
+        return [f"```\n{chunks[0]}\n```"]
+    return [
+        f"(part {i}/{len(chunks)})\n```\n{chunk}\n```"
+        for i, chunk in enumerate(chunks, 1)
+    ]
+
+
+async def send_share_prompt(session: DraftSession, state: DraftState) -> None:
+    """Post the copy-pastable tournament prompt (sim mode ``prompt``)."""
+    await session.thread.send(SHARE_PROMPT_HEADER)
+    for message in prompt_messages(share_prompt(teams_for_sim(state))):
+        await session.thread.send(message)
 
 
 def teams_for_sim(state: DraftState) -> list[TeamDict]:
@@ -776,6 +817,9 @@ async def _render_complete(
         log.exception("final board repost failed for %s", session.thread_id)
     await session.thread.send(embed=complete_embed(state))
     if state.config.sim == "off":
+        return
+    if state.config.sim == "prompt":
+        await send_share_prompt(session, state)
         return
     session.sim_task = bot._spawn(bot._run_sim(session))
 

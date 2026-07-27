@@ -247,9 +247,16 @@ tests/
 
 ## 5. Tournament Sim (`sim.py`)
 
-- Three modes on `Config.sim`: `off`, `stats`, `ai`. `ai` without
-  `LLM_API_KEY` downgrades to `stats` with a note — the sim never blocks on
-  a missing key.
+- Four modes on `Config.sim`: `prompt` (default), `off`, `stats`, `ai`. `ai`
+  without `LLM_API_KEY` downgrades to `stats` with a note — the sim never
+  blocks on a missing key.
+- **`prompt`** (default) — no API call at all: on completion the bot posts a
+  copy-pastable prompt (`sim.share_prompt`, fenced code blocks chunked under
+  Discord's 2000-char cap by `ui.prompt_messages`) that players paste into
+  their own LLM — ChatGPT, Claude, Gemini — to run the tournament themselves.
+  Same primes-face-primes framing as `ai`, but the format choice, game
+  recaps, MVP, and standings are left to the reader's model. No key, no
+  cost; `/simulate` re-posts the prompt.
 - **`stats`** — deterministic, no network: rank teams by summed player score
   `4*stars + 0.35*ppg + 0.5*rpg + 0.7*apg`, name tie-break.
 - **`ai`** — the stats ranking plus one LLM call: Python `openai` SDK pointed

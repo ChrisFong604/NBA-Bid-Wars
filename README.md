@@ -5,11 +5,12 @@ revealed one at a time from a hidden shuffled queue, managers bid live with
 buttons, and every roster fills to five. The pool can span any run of eras
 from the 1960s through the 2020s — every player is anchored to the decade of
 their prime, and the commissioner picks the era range at creation. When the
-draft completes, a tournament sim ranks the teams — pure stats, or stats
-blended with an LLM ranking (via OpenRouter or any OpenAI-compatible router)
-where primes face primes across eras (1991 Jordan vs 2016 Curry) — and crowns
-a champion. State is snapshotted atomically to disk, so the bot survives a
-mid-auction restart.
+draft completes, the bot posts a copy-pastable tournament prompt for your own
+LLM by default (no API key, no cost) — or runs the sim itself: pure stats, or
+stats blended with an LLM ranking (via OpenRouter or any OpenAI-compatible
+router) where primes face primes across eras (1991 Jordan vs 2016 Curry) —
+and crowns a champion. State is snapshotted atomically to disk, so the bot
+survives a mid-auction restart.
 
 **The rules in brief:** everyone starts with the same budget (default $20).
 Each revealed player stays on the block for one flat clock (default 60s) —
@@ -55,7 +56,7 @@ uv run python -c "import discord; print(discord.Permissions(send_messages=True, 
 | Variable        | Required | Purpose                                                                     |
 | --------------- | -------- | --------------------------------------------------------------------------- |
 | `DISCORD_TOKEN` | yes      | Bot token from the Developer Portal                                          |
-| `LLM_API_KEY`   | no       | Only needed for sim mode `AI + stats` (e.g. an OpenRouter key); the stats-only sim needs no key |
+| `LLM_API_KEY`   | no       | Only needed for sim mode `AI + stats` (e.g. an OpenRouter key); the prompt and stats-only modes need no key |
 | `LLM_BASE_URL`  | no       | OpenAI-compatible endpoint; default `https://openrouter.ai/api/v1`           |
 | `SIM_MODEL`     | no       | Model slug for the sim; default `anthropic/claude-sonnet-4.5`                |
 | `TEST_GUILD_ID` | no       | Guild ID to mirror slash commands into for instant availability              |
@@ -105,8 +106,9 @@ private GitHub repo, clone with a fine-grained token URL
 
 1. `/draft create` in a text channel — options: `budget` (default $20),
    `clock` (15–300s each player stays on the block — flat, bids don't extend
-   it; default 60), `sim` (**Off** / **Stats only** / **AI + stats**; default
-   Off), and an era range (`era_from` / `era_to`, decade choices from
+   it; default 60), `sim` (**Prompt for your own LLM** / **Off** /
+   **Stats only** / **AI + stats**; default Prompt — a copy-pastable prompt
+   you run in your own LLM), and an era range (`era_from` / `era_to`, decade choices from
    **1960s** to **2020s**; default is all eras). Only players whose prime
    falls inside the range enter the pool — a narrow range with a big lobby
    may not be feasible, in which case `/draft start` asks you to widen the
@@ -119,10 +121,13 @@ private GitHub repo, clone with a fine-grained token URL
    when the flat clock expires pays and the player slots into their team.
 5. The last manager with money left picks the rest of their roster free via
    `/pick` (with autocomplete); everyone else's empty slots auto-fill.
-6. When every roster is full, the tournament sim posts the standings and a
-   champion — re-run it any time with `/simulate`. Stats-only mode needs no
-   API key; **AI + stats** blends in an LLM ranking and falls back to stats
-   with a note when `LLM_API_KEY` is unset.
+6. When every roster is full, the default **Prompt** mode posts a
+   copy-pastable prompt — paste it into your favorite LLM (ChatGPT, Claude,
+   Gemini) and it runs the tournament for you; no API key, no cost. The
+   bot-run modes post the standings and a champion directly: stats-only
+   needs no key, **AI + stats** blends in an LLM ranking and falls back to
+   stats with a note when `LLM_API_KEY` is unset. Re-run (or re-post) any
+   time with `/simulate`.
 
 Commissioner tools: `/draft pause`, `/draft resume`, `/draft addtime`,
 `/draft kick @user [replacement]`, `/draft cancel`. Anyone: `/swap`,
