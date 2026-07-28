@@ -201,18 +201,27 @@ def test_all_in_bid_legal_and_does_not_move_deadline():
     assert state2.manager(2).last_action_lot == 1
 
 
-def test_flat_clock_lot_sells_at_original_deadline():
-    """Bids — even last-second ones — never extend the flat lot clock; the
-    lot sells to the leader exactly at the deal-time deadline."""
+def test_soft_close_late_bid_extends_early_bid_does_not():
+    """Early bids never move the clock; a bid inside snipe_window pushes the
+    deadline out by snipe_extend and re-arms the timer (anti-sniping)."""
     state, _, rng = start_draft(2)
     deadline = state.lot.deadline
     assert deadline == 1000.0 + CFG.lot_seconds
-    state, _ = engine.apply(state, Bid(2, 1, 1001.0, amount=2), rng)
+    # Early bid (outside the window): deadline untouched, no re-arm.
+    state, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=2), rng)
     assert state.lot.deadline == deadline
-    state, _ = engine.apply(state, Bid(1, 1, deadline - 0.5, amount=3), rng)
-    assert state.lot.deadline == deadline  # last-second bid: still flat
+    assert fx_of(fx, ArmTimerFx) == []
+    # Last-half-second snipe: +snipe_extend, timer re-armed with the echo.
+    state, fx = engine.apply(state, Bid(1, 1, deadline - 0.5, amount=3), rng)
+    extended = deadline + CFG.snipe_extend
+    assert state.lot.deadline == extended
+    assert fx_of(fx, ArmTimerFx) == [ArmTimerFx("lot", 1, extended)]
+    # The old deadline's timer fire is stale — ignored.
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, deadline, deadline), rng)
+    assert state2 is state and fx == []
+    # The extended deadline sells to the sniper's counter-bidder... i.e. leader.
     state2, fx = engine.apply(
-        state, TimerExpired("lot", 1, deadline, deadline), rng
+        state, TimerExpired("lot", 1, extended, extended), rng
     )
     sold = fx_of(fx, SoldFx)[0]
     assert sold.manager_id == 1 and sold.price == 3

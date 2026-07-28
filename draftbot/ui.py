@@ -65,7 +65,7 @@ MAX_EMBEDS_PER_MESSAGE = 10  # Discord hard cap per message
 EMBED_CHAR_BUDGET = 5500  # headroom under Discord's 6000-char embed total
 CLOSE_BEAT_SECONDS = 2.0
 LOT_FOOTER = (
-    "flat clock — bids never add time · bid up to your full remaining "
+    "late bids add +5s (no sniping) · bid up to your full remaining "
     "budget; hit $0 and you're done bidding"
 )
 SIM_LABELS = {
@@ -238,7 +238,7 @@ def lobby_embed(state: DraftState) -> discord.Embed:
         name="Config",
         value=(
             f"Budget **${cfg.budget}** · clock **{cfg.lot_seconds}s flat** "
-            "(bids never extend it) · Eras: "
+            "(a bid in the last 10s adds 5s) · Eras: "
             f"**{era_label(cfg.era_start, cfg.era_end)}** · tournament sim "
             f"**{SIM_LABELS.get(cfg.sim, cfg.sim)}**"
         ),

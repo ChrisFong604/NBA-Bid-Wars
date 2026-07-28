@@ -254,7 +254,8 @@ def _deal_lot(state: DraftState, now: float) -> Transition:
             state.config.pass_rule == "pass_once"
             and player.id in state.passed_ids
         ),
-        # Flat clock (rule #5): armed once per lot; bids never extend it.
+        # Flat clock (rule #5): armed once per lot; only a bid inside the
+        # snipe window extends it (soft close, _bid).
         deadline=now + state.config.lot_seconds,
     )
     state2 = replace(state, queue=rest, lot=lot, lot_seq=seq)
@@ -291,12 +292,19 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
         return _err(state, uid, f"Bid must beat the current ${lot.current_bid}.")
     if effective > m.budget:
         return _err(state, uid, f"You've only got ${m.budget} left.")
-    # Flat clock: the deadline set at deal time stands — no re-arm on bids.
-    new_lot = replace(lot, current_bid=effective, leader_id=uid)
+    # Soft close: early bids never move the deadline, but a bid inside the
+    # snipe window pushes it out so nobody wins on a last-half-second snipe.
+    deadline = lot.deadline
+    if deadline - ev.now <= state.config.snipe_window:
+        deadline += state.config.snipe_extend
+    new_lot = replace(lot, current_bid=effective, leader_id=uid, deadline=deadline)
     state2 = _with_manager(
         replace(state, lot=new_lot), replace(m, last_action_lot=lot.seq)
     )
-    return state2, [BidPlaced(new_lot)]
+    fx: list[Effect] = [BidPlaced(new_lot)]
+    if deadline != lot.deadline:
+        fx.append(ArmTimerFx("lot", lot.seq, deadline))
+    return state2, fx
 
 
 def _lot_expired(

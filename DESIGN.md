@@ -14,7 +14,7 @@ an LLM ranking) and crowns a champion.
 ### Setup
 1. `/draft create` in a channel spawns a public thread for the draft. The creator
    is the **commissioner**. Options (all have defaults): budget `$20`, lot clock
-   `60s` (flat — bids never extend it), sim mode `off`/`stats`/`ai` (default
+   `60s` (soft close: late bids add 5s), sim mode `off`/`stats`/`ai` (default
    `ai`), max managers `10`, and an **era range** in 10-year increments —
    anywhere from the 1960s through the 2020s (e.g. 2000s–2020s, or
    1960s–1990s). Default is all eras. Each player belongs to the decade of
@@ -32,7 +32,8 @@ an LLM ranking) and crowns a champion.
 4. The next player is revealed as a card: name, team, position, last-season
    `ppg/rpg/apg`, and a 1–5 ⭐ rating derived from those stats.
 5. **Flat clock (default 30s):** each lot gets one countdown, armed at reveal —
-   bids never extend it. Any eligible manager may open at any integer from $1
+   only a bid inside the final 10s extends it by 5s (anti-snipe soft close).
+   Any eligible manager may open at any integer from $1
    up to their entire remaining budget — jump openings allowed, and going all-in
    ($20 on the very first player) is legal.
 6. **No opening bid → PASSED.**
@@ -135,7 +136,7 @@ Findings from the UX research, discord.py-flavored:
   tombstones.
 - **Lot card:** embed with author line `Lot #14 · 23 players left in the pool`,
   title `🏀 Jalen Suggs — PG`, fields for Current Bid / Leader / Status, and a
-  footer warning: *"flat clock — bids never add time · bid up to your full
+  footer warning: *"late bids add +5s (no sniping) · bid up to your full
   remaining budget; hit $0 and you're done bidding."* LAST CALL players get
   the 🔔 badge and a warning line.
 - **Countdown with zero edit spam:** deadlines render as Discord relative
@@ -201,7 +202,8 @@ tests/
   click, modal submit, timer fire, commissioner command — acquires it, applies
   the event, commits, then does Discord I/O outside the critical section.
 - **Timers:** one `asyncio` task per lot, armed once at reveal for the flat
-  `lot_seconds` clock — bids never touch it. `deadline` (epoch) lives in state
+  `lot_seconds` clock; a bid within `snipe_window` (10s) pushes it out by
+  `snipe_extend` (5s). `deadline` (epoch) lives in state
   and is the source of truth (only pause/resume and `/draft addtime` shift
   it, re-arming the task). When a timer fires it re-checks, under the lock,
   that its `lot_seq` and deadline still match state before closing the lot —
@@ -290,7 +292,7 @@ tests/
 ```python
 DEFAULTS = dict(
     budget=20, roster_size=5, slots=["PG", "SG", "SF", "PF", "C"],
-    lot_seconds=60,          # flat clock — bids never extend it
+    lot_seconds=60,          # soft close: bids in the last 10s add 5s
     quick_bids=[1, 2, 5], max_managers=10,
     pass_rule="pass_once",   # or "recycle_forever" if the group insists
     placement="any",

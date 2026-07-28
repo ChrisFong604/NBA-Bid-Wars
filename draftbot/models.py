@@ -35,7 +35,9 @@ class Config:
     slots: tuple[str, ...] = SLOTS
     era_start: int = 1960  # decade anchors, inclusive; host picks in
     era_end: int = 2020  # 10-year increments on /draft create
-    lot_seconds: int = 30  # flat clock per lot — bids never extend it
+    lot_seconds: int = 30  # clock per lot; only late bids extend it (soft close)
+    snipe_window: float = 10.0  # a bid this close to the deadline...
+    snipe_extend: float = 5.0  # ...pushes the deadline out by this much
     quick_bids: tuple[int, ...] = (1, 2, 5)
     min_managers: int = 2
     max_managers: int = 10

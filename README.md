@@ -14,7 +14,8 @@ survives a mid-auction restart.
 
 **The rules in brief:** everyone starts with the same budget (default $20).
 Each revealed player stays on the block for one flat clock (default 30s) —
-bids never extend it; the high bid when it expires wins. No bid means the
+a bid in the final 10 seconds adds 5 more (soft close — no last-second
+sniping); the high bid when it expires wins. No bid means the
 player is recycled once — on their second appearance (🔔 LAST CALL) they sell
 or get force-assigned at $1. The pool is exactly five players per manager, so
 every player ends up on a roster — zero leftovers. Go broke and you're a
@@ -107,7 +108,7 @@ private GitHub repo, clone with a fine-grained token URL
 ## How to play
 
 1. `/draft create` in a text channel — options: `budget` (default $20),
-   `clock` (15–300s each player stays on the block — flat, bids don't extend
+   `clock` (15–300s each player stays on the block — late bids extend
    it; default 30), `lineup` (0–300s to arrange lineups after the last
    roster fills; default 60, 0 skips the window), `sim` (**Prompt for your own LLM** / **Off** /
    **Stats only** / **AI + stats**; default Prompt — a copy-pastable prompt

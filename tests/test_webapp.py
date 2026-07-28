@@ -273,7 +273,8 @@ def test_full_draft_over_websockets(client):
     """Create → join → start → bid war (sold) → passes → force-assigns →
     free pick (pool revealed) → lineup swap → completion + sim prompt.
     Every phase transition is driven by real asyncio timers firing."""
-    cfg = Config(lot_seconds=0.4, lineup_seconds=0.6, afk_lots=99, sim="prompt")
+    cfg = Config(lot_seconds=0.4, lineup_seconds=0.6, afk_lots=99, sim="prompt",
+                 snipe_window=0.05, snipe_extend=0.1)
     room, token_a, uid_a = registry.create_room(cfg, "Alice")
     joined = client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"}).json()
     token_b, uid_b = joined["token"], joined["user_id"]
@@ -393,7 +394,8 @@ def test_three_manager_draft_with_broke_manager(client):
     Bob walks (autopilot), lots pass until Alice is the sole active manager:
     free pick reveals EXACTLY the live queue, Alice fills up, the other two
     auto-fill, lineup swap, completion, sim prompt to every socket."""
-    cfg = Config(lot_seconds=0.4, lineup_seconds=0.6, afk_lots=99, sim="prompt")
+    cfg = Config(lot_seconds=0.4, lineup_seconds=0.6, afk_lots=99, sim="prompt",
+                 snipe_window=0.05, snipe_extend=0.1)
     room, token_a, uid_a = registry.create_room(cfg, "Alice")
     b = client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"}).json()
     c = client.post(f"/api/rooms/{room.code}/join", json={"name": "Carol"}).json()

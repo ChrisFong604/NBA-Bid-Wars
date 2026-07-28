@@ -128,7 +128,7 @@ def test_lot_embed_flat_clock_no_hammer_wording():
     assert status == "Sells <t:1000:R>"
     dump = str(embed.to_dict()).lower()
     assert "hammer" not in dump and "opening window" not in dump
-    assert "flat clock" in embed.footer.text
+    assert "no sniping" in embed.footer.text
 
 
 def test_lot_embed_description_has_prime_era_flavor_on_one_line():

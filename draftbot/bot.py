@@ -616,7 +616,7 @@ def register_commands(bot: DraftBot) -> None:
     @draft.command(name="create", description="Open a draft lobby in a new thread")
     @app_commands.describe(
         budget="Starting budget per manager (default $20)",
-        clock="Seconds each player stays on the block — flat, bids don't extend it (default 30)",
+        clock="Seconds each player stays on the block — a bid in the last 10s adds 5s (default 30)",
         lineup="Seconds to arrange lineups after the last roster fills — 0 skips it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
