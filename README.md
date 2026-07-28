@@ -141,6 +141,20 @@ Commissioner tools: `/draft pause`, `/draft resume`, `/draft addtime`,
 `/draft kick @user [replacement]`, `/draft cancel`. Anyone: `/swap`,
 `/status`, `/pick` (picker only).
 
+## Web app
+
+The same game, browser-first, lives in `webapp/` — it imports the identical
+engine (`draftbot.engine`), so the rules can't drift. Run it with:
+
+```bash
+uv run uvicorn webapp.server:app
+```
+
+then open `http://localhost:8000`, create a room, and share the room link.
+Live ticking countdowns, always-visible board, drag-to-rearrange lineups,
+and a one-click copy button for the tournament prompt. Architecture and
+wire protocol: `webapp/PROTOCOL.md`.
+
 ## Refreshing the dataset
 
 `draftbot/data/players.json` is a curated static file (~320 players spanning
