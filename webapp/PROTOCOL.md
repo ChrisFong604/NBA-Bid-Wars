@@ -43,7 +43,9 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
            "team": "CHI", "ppg": 31.5, "rpg": 6.3, "apg": 5.5, "stars": 5,
            "decade": 1990, "prime": "1989–1993"},
           "last_call": false, "current_bid": 5, "leader": 2,
-          "deadline": 1769480000.0},
+          "deadline": 1769480000.0,
+          "lottery": {"participants": [2, 3], "entered": [2],
+                       "your_guess": 42}},
   "free_pick": {"picker": 3, "pool": [{...player}], "deadline": ...} | null,
   "lineup_deadline": 0.0,
   "paused": false,
@@ -55,15 +57,31 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
 same as Discord). Deadlines are epoch seconds; clients tick countdowns
 locally (web renders live clocks natively — no Discord mobile caveat).
 
+`lot.lottery` is the live all-in showdown, else `null`: `participants`
+(user ids, leader first), `entered` (who has locked a number — public,
+mirroring `LotteryGuessedFx`), and `your_guess` — the VIEWER'S own number
+or `null`. Other players' numbers are NEVER serialized before the
+`lottery_reveal` fx; `lot.deadline` is the showdown countdown while a
+lottery is open.
+
 ## WebSocket `/ws/{room}?token=...`
 
 Server→client messages:
 - `{"type": "state", "state": <state_view>}` — after every commit (full
   view; no diffing, states are tiny).
 - `{"type": "fx", "fx": [{"kind": "sold"|"passed"|"force"|"picked"|
-   "autofill"|"lineup_open"|"complete"|"paused"|"resumed"|"cancelled"|
-   "autopilot", ...payload}]}` — render-worthy effects for toasts/feed,
-  translated from engine effects (same vocabulary as `draftbot.ui`).
+   "autofill"|"lottery_open"|"lottery_joined"|"lottery_guessed"|
+   "lottery_cancelled"|"lottery_reveal"|"lineup_open"|"complete"|"paused"|
+   "resumed"|"cancelled"|"autopilot", ...payload}]}` — render-worthy
+  effects for toasts/feed, translated from engine effects (same vocabulary
+  as `draftbot.ui`). Showdown payloads: `lottery_open` carries
+  `participants`/`amount`/`deadline`; `lottery_joined` carries `manager` +
+  the grown `participants`; `lottery_guessed` carries only `manager`
+  (never the number); `lottery_cancelled` carries `manager` (the new
+  leader — the `state` broadcast has the new price/deadline);
+  `lottery_reveal` carries `mystery`, `guesses`
+  (`[{"manager", "guess"}]`, public at that point) and `winner`, and is
+  followed by the normal `sold` fx in the same batch.
 - `{"type": "error", "message": "..."}` — private, only to the acting
   socket (ErrorFx equivalent).
 - `{"type": "sim", "mode": "prompt"|"stats"|"ai", ...}` — at completion:
@@ -74,6 +92,8 @@ Client→server messages (server maps to engine events verbatim):
 - `{"action": "start"}` `{"action": "bid", "increment": 1}` /
   `{"amount": 7}` — engine validates everything.
 - `{"action": "pick", "player_id": "..."}`
+- `{"action": "guess", "number": 42}` — showdown participants' 1-100 pick
+  (resubmission overwrites; the engine gates participants/deadline/range).
 - `{"action": "swap", "a": "PG", "b": "C"}`
 - `{"action": "pause"} {"action": "resume"} {"action": "addtime",
    "seconds": 30} {"action": "kick", "target": 4} {"action": "cancel"}`
@@ -100,6 +120,13 @@ or any manager, matching `/simulate`'s draft-member gate).
   budgets, rosters), scrolling event feed. Layout: sidebar + main on
   desktop, stacked with sticky lot card on mobile (responsive, one
   breakpoint).
+- All-in showdown: when `lot.lottery` is set the lot card grows a 🎰 strip
+  naming the participants with the ticking countdown (`lot.deadline`);
+  participants get a 1-100 input + Lock-in button (✓ + own number after
+  the state ack, editable until the reveal); richer managers keep the live
+  bid controls (outbidding cancels). The `lottery_reveal` fx renders a
+  result card in the feed: mystery number, every guess with its distance,
+  winner highlighted.
 - Free pick: revealed pool as a clickable grid for the picker; spectators
   see the grid read-only.
 - Lineup window: countdown + the five slots; drag to rearrange via Pointer

@@ -44,6 +44,7 @@ from .models import (
     Leave,
     LobbyFx,
     LotOpened,
+    LotteryGuess,
     PassedFx,
     Pause,
     PausedFx,
@@ -266,6 +267,9 @@ class DraftBot(discord.Client):
                 and lot is not None
                 and lot.seq == lot_seq
                 and lot.deadline == deadline
+                # A live showdown's card shows its own countdown status —
+                # skipping the warning edit is simpler than restyling it.
+                and lot.lottery is None
             ):
                 try:
                     await ui.edit_lot(
@@ -432,6 +436,34 @@ class DraftBot(discord.Client):
                 await interaction.response.defer()
             except discord.HTTPException:
                 log.debug("final bid ack failed", exc_info=True)
+
+    async def handle_lottery_guess(
+        self,
+        interaction: discord.Interaction,
+        thread_id: int,
+        lot_seq: int,
+        guess: int,
+    ) -> None:
+        """🎲 showdown modal submit — engine validates, ack stays private."""
+        session = self.sessions.get(thread_id)
+        if session is None:
+            await _reply_ephemeral(interaction, self.missing_session_message())
+            return
+        event = LotteryGuess(
+            user_id=interaction.user.id,
+            lot_seq=lot_seq,
+            guess=guess,
+            now=time.time(),
+        )
+        effects = await self.apply_event(session, event)
+        await self.render(session, effects, interaction)
+        if not interaction.response.is_done():  # no ErrorFx claimed the ack
+            try:
+                await interaction.response.send_message(
+                    "🎲 Locked in — keep it secret.", ephemeral=True
+                )
+            except discord.HTTPException:
+                log.debug("final guess ack failed", exc_info=True)
 
     async def handle_lineup_panel(
         self, interaction: discord.Interaction, thread_id: int

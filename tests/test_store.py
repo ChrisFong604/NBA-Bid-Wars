@@ -7,7 +7,7 @@ import json
 import pytest
 
 from draftbot import engine
-from draftbot.models import Bid, Config, DraftState, Swap, TimerExpired
+from draftbot.models import Bid, Config, DraftState, Lottery, Swap, TimerExpired
 from draftbot.store import load_snapshot, save_snapshot, state_to_dict
 from helpers import make_manager, start_draft
 
@@ -119,6 +119,59 @@ def test_lineup_phase_snapshot_roundtrips(tmp_path):
     assert loaded == state
     assert loaded.phase == "lineup" and loaded.lineup_deadline == 5000.0
     assert meta == {"thread_id": 7}
+
+
+def lottery_state():
+    """rich_state's live lot (leader 3 at $2) with a showdown in flight."""
+    state = rich_state()
+    lottery = Lottery(participants=(3, 1), guesses=((3, 7), (1, 99)))
+    return dataclasses.replace(
+        state, lot=dataclasses.replace(state.lot, lottery=lottery)
+    )
+
+
+def test_live_lottery_snapshot_roundtrips(tmp_path):
+    state = lottery_state()
+    path = tmp_path / "snap.json"
+    save_snapshot(path, state, {"thread_id": 1})
+    loaded, _ = load_snapshot(path)
+    assert loaded == state
+    lot = loaded.lot
+    assert lot.lottery.participants == (3, 1)
+    # JSON delivers guesses as 2-lists; the loader coerces to int pairs.
+    assert lot.lottery.guesses == ((3, 7), (1, 99))
+    assert all(isinstance(g, tuple) for g in lot.lottery.guesses)
+
+
+def test_old_shape_lot_dict_defaults_lottery_none(tmp_path):
+    """Snapshots written before the showdown feature have no ``lottery`` key
+    on the lot dict — the loader must default it to None."""
+    state = rich_state()
+    payload = {"state": state_to_dict(state), "meta": {"v": 1}}
+    del payload["state"]["lot"]["lottery"]
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded, _ = load_snapshot(path)
+    assert loaded.lot.lottery is None
+    assert loaded == state
+
+
+def test_recovered_snapshot_redeal_drops_mid_flight_lottery(tmp_path):
+    """Bot crash recovery re-deals the interrupted lot; a mid-flight showdown
+    is dropped by design (v1) — the fresh lot must come back clean."""
+    state = lottery_state()
+    path = tmp_path / "snap.json"
+    save_snapshot(path, state, {})
+    loaded, _ = load_snapshot(path)
+    assert loaded.lot.lottery is not None
+    # Mirror the bot: interrupted lot's player back to the queue head, redeal.
+    recovered = dataclasses.replace(
+        loaded, queue=(loaded.lot.player,) + loaded.queue
+    )
+    state2, _ = engine.redeal(recovered, 9_000.0)
+    assert state2.lot.lottery is None
+    assert state2.lot.player == state.lot.player
+    assert state2.lot.current_bid == 0 and state2.lot.leader_id is None
 
 
 def test_failed_save_cleans_tmp_and_preserves_old_snapshot(tmp_path):

@@ -26,6 +26,11 @@ from draftbot.models import (
     FreePickFx,
     Join,
     LineupPhaseFx,
+    LotteryGuess,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
     PassedFx,
     Pause,
     Pick,
@@ -314,6 +319,89 @@ def test_scripted_broke_freepick_pause_resume():
     assert Counter(e.kind for e in state.log) == Counter(
         {"passed": 1, "sold": 3, "pick": 5, "autofill": 12}
     )
+
+
+def test_scripted_all_in_showdown_resolves_and_draft_completes():
+    """Three managers go all-in at the full $20 on lot 1: tie -> showdown ->
+    guesses (one overwrite, one missing) -> seeded reveal -> winner charged
+    their whole budget -> the draft then runs to a consistent completion."""
+    rng = random.Random(3)
+    state = fresh_draft(rng)
+    player = state.lot.player
+
+    # m1 all-in $20; m2 matches -> showdown opens with a 15s countdown.
+    state, _ = engine.apply(state, Bid(1, 1, 1001.0, amount=20), rng)
+    state, fx = engine.apply(state, Bid(2, 1, 1002.0, amount=20), rng)
+    opened = next(f for f in fx if isinstance(f, LotteryOpenedFx))
+    assert opened.lot.lottery.participants == (1, 2)
+    assert state.lot.deadline == 1002.0 + state.config.lottery_seconds
+    assert any(isinstance(f, ArmTimerFx) for f in fx)
+
+    # m3 joins late; the countdown does NOT reset.
+    state, fx = engine.apply(state, Bid(3, 1, 1003.0, amount=20), rng)
+    joined = next(f for f in fx if isinstance(f, LotteryJoinedFx))
+    assert joined.manager_id == 3
+    assert state.lot.lottery.participants == (1, 2, 3)
+    assert state.lot.deadline == 1002.0 + state.config.lottery_seconds
+
+    # Guesses: m1 locks 50, m2 locks 10 then overwrites to 80, m3 fumbles.
+    state, fx = engine.apply(state, LotteryGuess(1, 1, 50, 1004.0), rng)
+    assert fx == [LotteryGuessedFx(1)]
+    state, _ = engine.apply(state, LotteryGuess(2, 1, 10, 1004.5), rng)
+    state, _ = engine.apply(state, LotteryGuess(2, 1, 80, 1005.0), rng)
+    assert dict(state.lot.lottery.guesses) == {1: 50, 2: 80}
+    _, fx = engine.apply(state, LotteryGuess(4, 1, 42, 1005.5), rng)
+    assert any(isinstance(f, ErrorFx) for f in fx)  # m4 never went all-in
+
+    # Predict the resolution by cloning the engine rng: m3's missing guess
+    # fills first, then the mystery draw, then the (possibly tied) choice.
+    clone = random.Random()
+    clone.setstate(rng.getstate())
+    fill3 = clone.randint(1, 100)
+    mystery = clone.randint(1, 100)
+    dist = {1: abs(50 - mystery), 2: abs(80 - mystery), 3: abs(fill3 - mystery)}
+    best = min(dist.values())
+    winner = clone.choice([u for u in (1, 2, 3) if dist[u] == best])
+
+    deadline = state.lot.deadline
+    state, fx = engine.apply(state, TimerExpired("lot", 1, deadline, deadline), rng)
+    assert fx[0] == LotteryRevealFx(mystery, ((1, 50), (2, 80), (3, fill3)), winner)
+    assert fx[1] == SoldFx(player, winner, 20)
+    assert state.manager(winner).budget == 0
+    assert any(
+        s.player is not None and s.player.id == player.id and s.price == 20
+        for s in state.manager(winner).spots
+    )
+    assert_invariants(state)
+    assert state.phase == "auction" and state.lot.seq == 2  # flow continues
+
+    # Nobody else bids: pass / LAST CALL / force / free-pick to completion.
+    guard = 0
+    while state.phase == "auction":
+        guard += 1
+        assert guard < 200, "draft failed to terminate"
+        lot = state.lot
+        state, _ = engine.apply(
+            state, TimerExpired("lot", lot.seq, lot.deadline, lot.deadline), rng
+        )
+        assert_invariants(state)
+    while state.phase == "free_pick":
+        picker = state.active_managers[0]
+        state, _ = engine.apply(
+            state,
+            Pick(picker.user_id, state.queue[0].id, state.pick_deadline - 1.0),
+            rng,
+        )
+        assert_invariants(state)
+    if state.phase == "lineup":
+        state, _ = engine.apply(
+            state,
+            TimerExpired("lineup", -1, state.lineup_deadline, state.lineup_deadline),
+            rng,
+        )
+    assert_complete_and_consistent(state)
+    sold = next(e for e in state.log if e.kind == "sold")
+    assert (sold.manager_id, sold.price) == (winner, 20)
 
 
 # ---------------------------------------------------------- era-range pool

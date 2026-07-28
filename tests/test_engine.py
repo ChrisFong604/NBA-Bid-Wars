@@ -27,8 +27,16 @@ from draftbot.models import (
     Leave,
     LineupPhaseFx,
     LobbyFx,
+    LogEntry,
     Lot,
     LotOpened,
+    Lottery,
+    LotteryCancelledFx,
+    LotteryGuess,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
     PassedFx,
     Pause,
     PausedFx,
@@ -278,6 +286,242 @@ def test_quick_increment_raises_live_bid():
     assert state.lot.current_bid == 1  # opens at the increment
     state, fx = engine.apply(state, Bid(1, 1, 1002.0, increment=5), rng)
     assert state.lot.current_bid == 6 and state.lot.leader_id == 1
+
+
+# ------------------------------------------------------ all-in showdown
+
+def showdown_state(
+    lottery: Lottery | None = None,
+    budgets: tuple[int, ...] = (5, 5, 5, 9),
+    last_call: bool = False,
+) -> DraftState:
+    """Live lot at $5 led by all-in manager 1; managers 2/3 hold exactly $5
+    (eligible matchers), manager 4 holds $9 (richer)."""
+    managers = tuple(
+        make_manager(i + 1, CFG, budget=b) for i, b in enumerate(budgets)
+    )
+    lot = Lot(
+        seq=1, player=px("showdown"), last_call=last_call,
+        current_bid=5, leader_id=1, deadline=1030.0, lottery=lottery,
+    )
+    return auction_state(CFG, managers, make_players(3)[:9], lot)
+
+
+def test_all_in_tie_opens_showdown():
+    state = showdown_state()
+    state2, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=5))
+    lot = state2.lot
+    assert lot.lottery == Lottery(participants=(1, 2))
+    assert lot.current_bid == 5 and lot.leader_id == 1  # unchanged
+    assert lot.deadline == 1001.0 + CFG.lottery_seconds
+    assert fx == [LotteryOpenedFx(lot), ArmTimerFx("lot", 1, lot.deadline)]
+    assert state2.manager(2).last_action_lot == 1
+    # An increment landing exactly on the live amount opens it too.
+    state3, fx3 = engine.apply(state, Bid(3, 1, 1002.0, increment=0))
+    assert fx_of(fx3, LotteryOpenedFx)
+    assert state3.lot.lottery == Lottery(participants=(1, 3))
+
+
+def test_match_rejected_when_leader_not_all_in():
+    # Leader bid $5 but holds $8 — a matching $5 is an ordinary rejection.
+    state = showdown_state(budgets=(8, 5, 5, 9))
+    state2, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=5))
+    assert state2 is state
+    assert fx == [ErrorFx(2, "Bid must beat the current $5.")]
+
+
+def test_showdown_opens_on_last_call_lot():
+    state = showdown_state(last_call=True)
+    state2, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=5))
+    assert state2.lot.lottery == Lottery(participants=(1, 2))
+    assert fx_of(fx, LotteryOpenedFx)
+
+
+def test_third_joiner_keeps_deadline():
+    state = showdown_state(Lottery(participants=(1, 2)))
+    state2, fx = engine.apply(state, Bid(3, 1, 1005.0, amount=5))
+    lot = state2.lot
+    assert lot.lottery.participants == (1, 2, 3)
+    assert lot.deadline == 1030.0  # deadline UNCHANGED, no re-arm
+    assert fx == [LotteryJoinedFx(lot, 3)]
+    # A participant can't join twice; the leader bounces as high bidder.
+    state3, fx3 = engine.apply(state2, Bid(2, 1, 1006.0, amount=5))
+    assert state3 is state2
+    assert fx3 == [ErrorFx(2, "You're already in the showdown.")]
+    _, fx4 = engine.apply(state2, Bid(1, 1, 1006.0, amount=5))
+    assert fx4 == [ErrorFx(1, "You're already the high bidder.")]
+
+
+def test_autopilot_manager_cannot_join_showdown():
+    state = showdown_state(Lottery(participants=(1, 2)))
+    state, _ = engine.apply(state, Leave(3))
+    state2, fx = engine.apply(state, Bid(3, 1, 1005.0, amount=5))
+    assert state2 is state and isinstance(fx[0], ErrorFx)
+    assert state2.lot.lottery.participants == (1, 2)
+
+
+def test_guess_lock_overwrite_and_rejections():
+    state = showdown_state(Lottery(participants=(1, 2)))
+    state, fx = engine.apply(state, LotteryGuess(1, 1, 42, 1005.0))
+    assert state.lot.lottery.guesses == ((1, 42),)
+    assert fx == [LotteryGuessedFx(1)]  # announces WHO only, not the value
+    state, _ = engine.apply(state, LotteryGuess(2, 1, 77, 1006.0))
+    state, fx = engine.apply(state, LotteryGuess(1, 1, 43, 1007.0))  # overwrite
+    assert fx == [LotteryGuessedFx(1)]
+    assert dict(state.lot.lottery.guesses) == {1: 43, 2: 77}
+    for ev in (
+        LotteryGuess(4, 1, 50, 1008.0),   # not a participant
+        LotteryGuess(9, 1, 50, 1008.0),   # not even a manager
+        LotteryGuess(1, 1, 50, 1030.5),   # after the deadline
+        LotteryGuess(1, 9, 50, 1008.0),   # stale lot seq
+        LotteryGuess(1, 1, 0, 1008.0),    # below 1
+        LotteryGuess(1, 1, 101, 1008.0),  # above 100
+    ):
+        state2, fx = engine.apply(state, ev)
+        assert state2 is state and isinstance(fx[0], ErrorFx)
+    # No showdown running at all -> error.
+    plain = showdown_state()
+    plain2, fx = engine.apply(plain, LotteryGuess(1, 1, 50, 1005.0))
+    assert plain2 is plain and isinstance(fx[0], ErrorFx)
+
+
+def test_richer_bid_cancels_showdown():
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((1, 42),)))
+    state2, fx = engine.apply(state, Bid(4, 1, 1010.0, amount=6))
+    lot = state2.lot
+    assert lot.lottery is None
+    assert lot.current_bid == 6 and lot.leader_id == 4
+    assert lot.deadline == 1010.0 + CFG.snipe_window  # fresh bidding window
+    assert fx == [
+        LotteryCancelledFx(4),
+        BidPlaced(lot),
+        ArmTimerFx("lot", 1, lot.deadline),
+    ]
+    # <= current_bid from the richer manager stays a normal rejection.
+    state3, fx3 = engine.apply(state, Bid(4, 1, 1010.0, amount=5))
+    assert state3 is state
+    assert fx3 == [ErrorFx(4, "Bid must beat the current $5.")]
+    # Ordinary soft-close applies to the post-cancel window.
+    state4, fx4 = engine.apply(state2, Bid(2, 1, lot.deadline - 0.5, amount=7))
+    assert isinstance(fx4[0], ErrorFx)  # $7 > manager 2's $5 budget
+    state4, fx4 = engine.apply(state2, Bid(3, 1, lot.deadline - 0.5, amount=5))
+    assert isinstance(fx4[0], ErrorFx)  # $5 no longer beats $6
+
+
+def test_showdown_resolves_closest_guess_wins_and_sale_flows_on():
+    state = showdown_state(
+        Lottery(participants=(1, 2, 3), guesses=((1, 10), (2, 60), (3, 90)))
+    )
+    player = state.lot.player
+    rng = random.Random(21)
+    clone = random.Random(21)
+    mystery = clone.randint(1, 100)  # no fills: the mystery is drawn first
+    dist = {1: abs(10 - mystery), 2: abs(60 - mystery), 3: abs(90 - mystery)}
+    best = min(dist.values())
+    expected = clone.choice([u for u in (1, 2, 3) if dist[u] == best])
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    assert fx[0] == LotteryRevealFx(mystery, ((1, 10), (2, 60), (3, 90)), expected)
+    assert fx[1] == SoldFx(player, expected, 5)
+    assert isinstance(fx[2], BoardFx)
+    w = state2.manager(expected)
+    assert w.budget == 0  # charged their whole stack
+    assert w.spots[0].player == player and w.spots[0].price == 5
+    assert state2.log[-1] == LogEntry("sold", player, expected, 5)
+    for uid in {1, 2, 3} - {expected}:  # losers keep their money
+        assert state2.manager(uid).budget == 5
+    # Normal post-sale flow: >= 2 actives remain, so the next lot is dealt.
+    assert state2.lot.seq == 2 and state2.lot.lottery is None
+    assert fx_of(fx, LotOpened)
+
+
+def test_showdown_distance_tie_resolved_by_seeded_choice():
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((1, 40), (2, 40))))
+    rng = random.Random(4)
+    clone = random.Random(4)
+    mystery = clone.randint(1, 100)
+    expected = clone.choice([1, 2])  # equal guesses always tie on distance
+    _, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    reveal = fx_of(fx, LotteryRevealFx)[0]
+    assert reveal.mystery == mystery and reveal.winner_id == expected
+
+
+def test_showdown_fills_missing_guesses_randomly():
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((2, 30),)))
+    rng = random.Random(9)
+    clone = random.Random(9)
+    fill1 = clone.randint(1, 100)  # missing guesses fill in participant order
+    mystery = clone.randint(1, 100)
+    dist = {1: abs(fill1 - mystery), 2: abs(30 - mystery)}
+    best = min(dist.values())
+    expected = clone.choice([u for u in (1, 2) if dist[u] == best])
+    _, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    reveal = fx_of(fx, LotteryRevealFx)[0]
+    assert reveal.guesses == ((1, fill1), (2, 30))
+    assert reveal.winner_id == expected
+
+
+def test_pause_resume_mid_showdown_shifts_deadline():
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((1, 42),)))
+    state, fx = engine.apply(state, Pause(1, 1020.0))
+    assert state.paused and state.pause_remaining == 10.0
+    assert fx == [CancelTimerFx(), PausedFx()]
+    _, fxg = engine.apply(state, LotteryGuess(2, 1, 60, 1021.0))
+    assert isinstance(fxg[0], ErrorFx)  # guesses bounce while paused
+    state, fx = engine.apply(state, Resume(1, 2000.0))
+    lot = state.lot
+    assert lot.deadline == 2010.0  # frozen 10s came back
+    assert lot.lottery == Lottery(participants=(1, 2), guesses=((1, 42),))
+    assert ArmTimerFx("lot", 1, 2010.0) in fx
+    # The old deadline's fire is stale; the shifted one resolves the showdown.
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0))
+    assert state2 is state and fx == []
+    state3, fx = engine.apply(
+        state, TimerExpired("lot", 1, 2010.0, 2010.0), random.Random(0)
+    )
+    assert fx_of(fx, LotteryRevealFx) and fx_of(fx, SoldFx)
+
+
+def test_leaver_stays_in_showdown_and_pays_on_win():
+    # Guesses 100 vs 1; seed 1 draws mystery 18 -> the leaver (2) wins.
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((1, 100), (2, 1))))
+    state, _ = engine.apply(state, Leave(2))
+    assert state.manager(2).autopilot
+    assert state.lot.lottery.participants == (1, 2)  # still in
+    rng = random.Random(1)
+    clone = random.Random(1)
+    mystery = clone.randint(1, 100)
+    assert abs(1 - mystery) < abs(100 - mystery)  # seed picked so 2 wins
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    reveal = fx_of(fx, LotteryRevealFx)[0]
+    assert reveal.winner_id == 2
+    m2 = state2.manager(2)
+    assert m2.budget == 0 and m2.autopilot  # their team paid anyway
+    assert fx_of(fx, SoldFx) == [SoldFx(state.lot.player, 2, 5)]
+
+
+def test_kick_replacement_inherits_showdown_entry():
+    # Like a standing bid, a showdown entry follows the replacement — a
+    # stale user_id in participants would crash resolution.
+    state = showdown_state(Lottery(participants=(1, 2), guesses=((2, 40),)))
+    state, _ = engine.apply(
+        state, Kick(1, target_id=2, now=1005.0, replacement_id=99,
+                    replacement_name="Repl")
+    )
+    assert state.lot.lottery.participants == (1, 99)
+    assert state.lot.lottery.guesses == ((99, 40),)
+    # Kicking the leader keeps participants[0] == leader_id too.
+    state2, _ = engine.apply(
+        state, Kick(1, target_id=1, now=1006.0, replacement_id=88,
+                    replacement_name="Repl2")
+    )
+    assert state2.lot.leader_id == 88
+    assert state2.lot.lottery.participants == (88, 99)
+    # Resolution charges the replacement's team, never the ghost id.
+    rng = random.Random(1)
+    state3, fx = engine.apply(state2, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    reveal = fx_of(fx, LotteryRevealFx)[0]
+    assert reveal.winner_id in (88, 99)
+    assert state3.manager(reveal.winner_id).budget == 0
 
 
 # ----------------------------------------------------------- lot resolution

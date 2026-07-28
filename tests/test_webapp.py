@@ -12,8 +12,18 @@ from dataclasses import replace
 import pytest
 from fastapi.testclient import TestClient
 
-from draftbot.models import Config
-from helpers import make_manager
+from draftbot.models import (
+    Config,
+    Lot,
+    Lottery,
+    LotteryCancelledFx,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
+)
+from helpers import auction_state, make_manager, make_players
+from webapp import views
 from webapp.rooms import ROOM_CODE_ALPHABET, RoomRegistry
 from webapp.server import app, registry
 
@@ -156,6 +166,10 @@ def test_ws_malformed_and_unknown_actions(client):
         assert ws.receive_json()["type"] == "error"
         ws.send_json({"action": "bid", "increment": "lots"})
         assert ws.receive_json()["type"] == "error"
+        ws.send_json({"action": "guess", "number": "seven"})  # malformed
+        assert ws.receive_json()["type"] == "error"
+        ws.send_json({"action": "guess", "number": 7})  # engine: no showdown
+        assert ws.receive_json()["type"] == "error"
 
 
 def test_state_redaction_in_auction(client):
@@ -264,6 +278,209 @@ def test_hidden_queue_players_unreachable_for_manager_and_spectator(client):
             assert visible == {lot_id}  # nothing but the on-block player
             assert not visible & hidden_ids
             assert _state(st)["log"] == []  # no name leaks via the log either
+
+
+# ------------------------------------------------- all-in showdown (lottery)
+
+
+def _lottery_lot():
+    return Lot(
+        seq=1,
+        player=make_players()[0],
+        last_call=False,
+        current_bid=3,
+        leader_id=2,
+        deadline=2000.0,
+        lottery=Lottery(participants=(2, 3), guesses=((2, 87),)),
+    )
+
+
+def test_lottery_state_view_redacts_other_guesses():
+    cfg = Config(budget=3)
+    state = auction_state(
+        cfg,
+        (make_manager(1, cfg), make_manager(2, cfg), make_manager(3, cfg)),
+        queue=(),
+        lot=_lottery_lot(),
+    )
+    owner = views.state_view(state, 2)["lot"]["lottery"]
+    assert owner == {"participants": [2, 3], "entered": [2], "your_guess": 87}
+    # rival participant, non-participant manager, tokenless spectator: the
+    # sentinel value 87 must be unreachable anywhere in their payloads.
+    for viewer in (3, 1, None):
+        view = views.state_view(state, viewer)
+        assert view["lot"]["lottery"]["your_guess"] is None
+        assert view["lot"]["lottery"]["entered"] == [2]
+        assert "87" not in json.dumps(view)
+
+
+def test_lottery_fx_translations():
+    lot = _lottery_lot()
+    assert views.fx_view(LotteryOpenedFx(lot)) == {
+        "kind": "lottery_open",
+        "participants": [2, 3],
+        "amount": 3,
+        "deadline": 2000.0,
+    }
+    assert views.fx_view(LotteryJoinedFx(lot, 4)) == {
+        "kind": "lottery_joined",
+        "manager": 4,
+        "participants": [2, 3],
+    }
+    # who locked in is public — the number never rides a pre-reveal fx
+    assert views.fx_view(LotteryGuessedFx(3)) == {
+        "kind": "lottery_guessed",
+        "manager": 3,
+    }
+    assert views.fx_view(LotteryCancelledFx(5)) == {
+        "kind": "lottery_cancelled",
+        "manager": 5,
+    }
+    assert views.fx_view(LotteryRevealFx(41, ((2, 40), (3, 90)), 2)) == {
+        "kind": "lottery_reveal",
+        "mystery": 41,
+        "guesses": [{"manager": 2, "guess": 40}, {"manager": 3, "guess": 90}],
+        "winner": 2,
+    }
+
+
+SECRET_KEYS = ("your_guess", "guess", "guesses", "mystery")
+
+
+def _secret_pairs(node):
+    """Every (key, value) under a guess-carrying key anywhere in a payload."""
+    found = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in SECRET_KEYS:
+                found.append((key, value))
+            found.extend(_secret_pairs(value))
+    elif isinstance(node, list):
+        for value in node:
+            found.extend(_secret_pairs(value))
+    return found
+
+
+def test_all_in_showdown_over_websockets(client):
+    """Bob and Carol collide at their entire $3 budgets: the showdown opens,
+    both lock a secret number, the real asyncio timer resolves it — reveal fx
+    then the sale to the lottery winner in one batch. No socket ever sees
+    another player's number (or the mystery) before its reveal frame."""
+    cfg = Config(budget=3, lot_seconds=5, lottery_seconds=0.8, afk_lots=99,
+                 snipe_window=0.05, snipe_extend=0.1, sim="off")
+    room, token_a, uid_a = registry.create_room(cfg, "Alice")
+    b = client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"}).json()
+    c = client.post(f"/api/rooms/{room.code}/join", json={"name": "Carol"}).json()
+    uid_b, uid_c = b["user_id"], c["user_id"]
+
+    def _lottery(m):
+        return (_state(m).get("lot") or {}).get("lottery")
+
+    seen_a: list[dict] = []
+    seen_b: list[dict] = []
+    seen_c: list[dict] = []
+    with client.websocket_connect(f"/ws/{room.code}?token={token_a}") as ws_a, \
+            client.websocket_connect(f"/ws/{room.code}?token={b['token']}") as ws_b, \
+            client.websocket_connect(f"/ws/{room.code}?token={c['token']}") as ws_c:
+        for ws, seen in ((ws_a, seen_a), (ws_b, seen_b), (ws_c, seen_c)):
+            seen.append(ws.receive_json())
+        ws_a.send_json({"action": "start"})
+        for ws, seen in ((ws_a, seen_a), (ws_b, seen_b), (ws_c, seen_c)):
+            _recv_until(ws, lambda m: _is_phase(m, "auction"), seen)
+
+        # --- Bob goes all-in at his whole $3; Carol matches it exactly
+        ws_b.send_json({"action": "bid", "amount": 3})
+        _recv_until(ws_c, lambda m: _bid_at(m, 3), seen_c)
+        ws_c.send_json({"action": "bid", "amount": 3})
+        open_st = _recv_until(
+            ws_a, lambda m: m.get("type") == "state" and _lottery(m), seen_a
+        )
+        lo = _lottery(open_st)
+        assert lo["participants"] == [uid_b, uid_c]
+        assert lo["entered"] == [] and lo["your_guess"] is None
+        open_fx = _fx(
+            _recv_until(ws_a, lambda m: "lottery_open" in _fx_kinds(m), seen_a),
+            "lottery_open",
+        )
+        assert open_fx["participants"] == [uid_b, uid_c]
+        assert open_fx["amount"] == 3
+        assert open_fx["deadline"] == _state(open_st)["lot"]["deadline"]
+
+        # --- a non-participant's guess is rejected privately
+        ws_a.send_json({"action": "guess", "number": 50})
+        err = _recv_until(ws_a, lambda m: m.get("type") == "error", seen_a)
+        assert err["message"] == "You're not in this showdown."
+
+        # --- both participants lock in; each acks only their own number
+        ws_b.send_json({"action": "guess", "number": 13})
+        _recv_until(
+            ws_b,
+            lambda m: m.get("type") == "state"
+            and (_lottery(m) or {}).get("your_guess") == 13,
+            seen_b,
+        )
+        guessed = _recv_until(
+            ws_a, lambda m: "lottery_guessed" in _fx_kinds(m), seen_a
+        )
+        assert _fx(guessed, "lottery_guessed")["manager"] == uid_b
+        ws_c.send_json({"action": "guess", "number": 87})
+        _recv_until(
+            ws_c,
+            lambda m: m.get("type") == "state"
+            and (_lottery(m) or {}).get("your_guess") == 87,
+            seen_c,
+        )
+        both = _recv_until(
+            ws_a,
+            lambda m: m.get("type") == "state"
+            and sorted((_lottery(m) or {}).get("entered", [])) == [uid_b, uid_c],
+            seen_a,
+        )
+        assert _lottery(both)["your_guess"] is None  # Alice sees who, never what
+
+        # --- the showdown timer fires: reveal then the sale, one fx batch
+        reveal_msg = _recv_until(
+            ws_a, lambda m: "lottery_reveal" in _fx_kinds(m), seen_a
+        )
+        _recv_until(ws_b, lambda m: "lottery_reveal" in _fx_kinds(m), seen_b)
+        _recv_until(ws_c, lambda m: "lottery_reveal" in _fx_kinds(m), seen_c)
+        kinds = _fx_kinds(reveal_msg)
+        assert kinds.index("lottery_reveal") < kinds.index("sold")
+        reveal = _fx(reveal_msg, "lottery_reveal")
+        assert 1 <= reveal["mystery"] <= 100
+        assert reveal["guesses"] == [
+            {"manager": uid_b, "guess": 13},
+            {"manager": uid_c, "guess": 87},
+        ]
+        dist_b = abs(13 - reveal["mystery"])
+        dist_c = abs(87 - reveal["mystery"])
+        if dist_b != dist_c:
+            assert reveal["winner"] == (uid_b if dist_b < dist_c else uid_c)
+        else:
+            assert reveal["winner"] in (uid_b, uid_c)
+        sold = _fx(reveal_msg, "sold")
+        assert sold["manager"] == reveal["winner"] and sold["price"] == 3
+
+        # --- the winner really bought the player at their whole budget
+        post = _state(_recv_last_state(seen_a))
+        winner = next(m for m in post["managers"] if m["id"] == reveal["winner"])
+        assert winner["budget"] == 0
+        assert any(s["player"] and s["price"] == 3 for s in winner["spots"])
+        assert post["lot"]["lottery"] is None  # next lot dealt clean
+
+    # --- pre-reveal privacy scan over EVERY frame each socket received:
+    # the only guess-carrying key allowed is your own `your_guess`.
+    for seen, allowed in (
+        (seen_a, (None,)),
+        (seen_b, (None, 13)),
+        (seen_c, (None, 87)),
+    ):
+        reveal_at = next(
+            i for i, m in enumerate(seen) if "lottery_reveal" in _fx_kinds(m)
+        )
+        for frame in seen[:reveal_at]:
+            for key, value in _secret_pairs(frame):
+                assert key == "your_guess" and value in allowed, (key, value)
 
 
 # ---------------------------------------------------- the full scripted draft

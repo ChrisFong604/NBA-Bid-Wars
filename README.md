@@ -15,7 +15,11 @@ survives a mid-auction restart.
 **The rules in brief:** everyone starts with the same budget (default $20).
 Each revealed player stays on the block for one flat clock (default 30s) —
 a bid in the final 10 seconds adds 5 more (soft close — no last-second
-sniping); the high bid when it expires wins. No bid means the
+sniping); the high bid when it expires wins. If the leader is all-in and you
+hold exactly that amount, matching it triggers a 🎰 **all-in showdown**: each
+tied manager secretly picks a number 1–100 and the closest to the bot's
+mystery number buys the player (15s clock; a richer manager can still break
+it up by bidding higher). No bid means the
 player is recycled once — on their second appearance (🔔 LAST CALL) they sell
 or get force-assigned at $1. The pool is exactly five players per manager, so
 every player ends up on a roster — zero leftovers. Go broke and you're a
@@ -123,6 +127,12 @@ private GitHub repo, clone with a fine-grained token URL
    rosters and is reposted at the bottom of the thread after every sale.
 4. Bid with **+$1 / +$2 / +$5** or **Custom…** on each lot card. The high bidder
    when the flat clock expires pays and the player slots into their team.
+   - **🎰 All-in showdown:** if the leader's bid is their entire budget and
+     yours is exactly the same amount, bidding it joins a showdown instead
+     of being rejected — tap **🎲 Pick my number** and pick 1–100 in secret
+     (15s; no pick gets a random one). Closest to the bot's mystery number
+     wins the player at that price; a richer manager can cancel the whole
+     thing by simply bidding more on the lot card.
 5. The last manager with money left picks the rest of their roster free via
    `/pick` (with autocomplete); everyone else's empty slots auto-fill.
 6. When the last roster fills, everyone gets ~60s to arrange their lineup —

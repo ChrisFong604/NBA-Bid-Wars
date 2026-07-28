@@ -37,6 +37,13 @@ from .models import (
     LogEntry,
     Lot,
     LotOpened,
+    Lottery,
+    LotteryCancelledFx,
+    LotteryGuess,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
     Manager,
     PassedFx,
     Pause,
@@ -79,6 +86,8 @@ def apply(
         if event.kind == "lineup":
             return _lineup_expired(state, event)
         return state, []
+    if isinstance(event, LotteryGuess):
+        return _lottery_guess(state, event)
     if isinstance(event, Pick):
         return _pick(state, event, r)
     if isinstance(event, Swap):
@@ -129,7 +138,10 @@ def redeal(
 ) -> Transition:
     """Crash recovery. The caller has already pushed the interrupted lot's
     player back to the queue head; deal it again as a fresh lot (new seq, so
-    pre-crash button clicks are stale by construction)."""
+    pre-crash button clicks are stale by construction).
+
+    Note: this silently drops any mid-flight showdown lottery (the fresh lot
+    has ``lottery=None``) — acceptable v1."""
     return _deal_lot(replace(state, lot=None), now)
 
 
@@ -218,7 +230,8 @@ def _leave(state: DraftState, ev: Leave) -> Transition:
     if state.phase in ("auction", "free_pick"):
         if m.autopilot:
             return _err(state, ev.user_id, "You've already left this draft.")
-        # Takes effect at the next lot resolution; a standing bid still pays.
+        # Takes effect at the next lot resolution; a standing bid still pays
+        # (and a showdown entry stays in — their team pays if it wins).
         m2 = replace(m, autopilot=True)
         return _with_manager(state, m2), [AutopilotFx(ev.user_id), BoardFx()]
     return _err(state, ev.user_id, "The draft is over.")
@@ -288,10 +301,65 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
         effective = ev.amount
     else:
         effective = lot.current_bid + (ev.increment or 0)
+    # ALL-IN SHOWDOWN: a bid landing exactly on the live amount, from a
+    # manager whose entire budget IS that amount, joins (or opens) a guess
+    # lottery instead of the usual "must beat" rejection — but opening
+    # requires the leader to be all-in too.
+    if lot.current_bid >= 1 and effective == m.budget == lot.current_bid:
+        if lot.lottery is not None:
+            if uid in lot.lottery.participants:
+                return _err(state, uid, "You're already in the showdown.")
+            new_lot = replace(
+                lot,
+                lottery=replace(
+                    lot.lottery,
+                    participants=lot.lottery.participants + (uid,),
+                ),
+            )
+            state2 = _with_manager(
+                replace(state, lot=new_lot), replace(m, last_action_lot=lot.seq)
+            )
+            # Deadline UNCHANGED: joiners ride the running countdown.
+            return state2, [LotteryJoinedFx(new_lot, uid)]
+        leader = state.manager(lot.leader_id) if lot.leader_id is not None else None
+        if leader is not None and leader.budget == lot.current_bid:
+            deadline = ev.now + state.config.lottery_seconds
+            new_lot = replace(
+                lot,
+                deadline=deadline,
+                lottery=Lottery(participants=(leader.user_id, uid)),
+            )
+            state2 = _with_manager(
+                replace(state, lot=new_lot), replace(m, last_action_lot=lot.seq)
+            )
+            return state2, [
+                LotteryOpenedFx(new_lot),
+                ArmTimerFx("lot", lot.seq, deadline),
+            ]
+        # Leader still holds spare budget — fall through to normal rejection.
     if effective < 1 or effective <= lot.current_bid:
         return _err(state, uid, f"Bid must beat the current ${lot.current_bid}.")
     if effective > m.budget:
         return _err(state, uid, f"You've only got ${m.budget} left.")
+    if lot.lottery is not None:
+        # A richer bid cancels the showdown: normal leader/price update plus
+        # a fresh snipe_window of bidding (ordinary soft-close afterwards).
+        deadline = ev.now + state.config.snipe_window
+        new_lot = replace(
+            lot,
+            current_bid=effective,
+            leader_id=uid,
+            deadline=deadline,
+            lottery=None,
+        )
+        state2 = _with_manager(
+            replace(state, lot=new_lot), replace(m, last_action_lot=lot.seq)
+        )
+        return state2, [
+            LotteryCancelledFx(uid),
+            BidPlaced(new_lot),
+            ArmTimerFx("lot", lot.seq, deadline),
+        ]
     # Soft close: early bids never move the deadline, but a bid inside the
     # snipe window pushes it out so nobody wins on a last-half-second snipe.
     deadline = lot.deadline
@@ -307,6 +375,26 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
     return state2, fx
 
 
+def _lottery_guess(state: DraftState, ev: LotteryGuess) -> Transition:
+    uid = ev.user_id
+    if state.paused:
+        return _err(state, uid, "The draft is paused.")
+    lot = state.lot
+    if state.phase != "auction" or lot is None or lot.lottery is None:
+        return _err(state, uid, "There's no showdown running right now.")
+    if ev.lot_seq != lot.seq or ev.now > lot.deadline:
+        return _err(state, uid, "That showdown already closed.")
+    if uid not in lot.lottery.participants:
+        return _err(state, uid, "You're not in this showdown.")
+    if not 1 <= ev.guess <= 100:
+        return _err(state, uid, "Pick a number from 1 to 100.")
+    # Resubmission overwrites; the value stays private until the reveal.
+    guesses = tuple(g for g in lot.lottery.guesses if g[0] != uid)
+    guesses += ((uid, ev.guess),)
+    new_lot = replace(lot, lottery=replace(lot.lottery, guesses=guesses))
+    return replace(state, lot=new_lot), [LotteryGuessedFx(uid)]
+
+
 def _lot_expired(
     state: DraftState, ev: TimerExpired, rng: random.Random
 ) -> Transition:
@@ -319,6 +407,29 @@ def _lot_expired(
         or ev.deadline != lot.deadline  # stale guard: addtime/resume re-arm
     ):
         return state, []
+    if lot.lottery is not None:  # ALL-IN SHOWDOWN — closest guess buys it
+        guessed = dict(lot.lottery.guesses)
+        filled = tuple(  # nobody forfeits to a fumbled UI: missing -> random
+            (p, guessed[p] if p in guessed else rng.randint(1, 100))
+            for p in lot.lottery.participants
+        )
+        mystery = rng.randint(1, 100)
+        best = min(abs(g - mystery) for _, g in filled)
+        winner_id = rng.choice([p for p, g in filled if abs(g - mystery) == best])
+        winner = state.manager(winner_id)
+        assert winner is not None
+        entry = LogEntry("sold", lot.player, winner_id, lot.current_bid)
+        state2 = replace(
+            _with_manager(state, _assign(winner, lot.player, lot.current_bid)),
+            lot=None,
+            log=state.log + (entry,),
+        )
+        reveal_fx: list[Effect] = [
+            LotteryRevealFx(mystery, filled, winner_id),
+            SoldFx(lot.player, winner_id, lot.current_bid),
+            BoardFx(),
+        ]
+        return _resolve_next(state2, ev.now, rng, reveal_fx)
     if lot.current_bid > 0:  # SOLD
         assert lot.leader_id is not None
         winner = state.manager(lot.leader_id)
@@ -587,6 +698,26 @@ def _kick(state: DraftState, ev: Kick) -> Transition:
             state2 = replace(
                 state2, lot=replace(state2.lot, leader_id=ev.replacement_id)
             )
+        lot = state2.lot
+        if (
+            lot is not None
+            and lot.lottery is not None
+            and ev.target_id in lot.lottery.participants
+        ):
+            # A showdown entry stands too: remap it (participants + any
+            # locked guess) or resolution would hit a ghost user_id.
+            lottery = replace(
+                lot.lottery,
+                participants=tuple(
+                    ev.replacement_id if p == ev.target_id else p
+                    for p in lot.lottery.participants
+                ),
+                guesses=tuple(
+                    (ev.replacement_id if u == ev.target_id else u, g)
+                    for u, g in lot.lottery.guesses
+                ),
+            )
+            state2 = replace(state2, lot=replace(lot, lottery=lottery))
         return state2, [BoardFx()]
     m2 = replace(target, autopilot=True)
     state2 = _with_manager(state, m2)

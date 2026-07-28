@@ -35,6 +35,11 @@ from .models import (
     LobbyFx,
     Lot,
     LotOpened,
+    LotteryCancelledFx,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
     Manager,
     PassedFx,
     PausedFx,
@@ -273,7 +278,12 @@ def lot_embed(
         embed.add_field(name="Current Bid", value=f"${lot.current_bid}")
         embed.add_field(name="Leader", value=f"<@{lot.leader_id}>")
         status = f"Sells {rel(lot.deadline)}"
-    if final_seconds:
+    if lot.lottery is not None:
+        # Showdown status owns the card; the FINAL SECONDS warning edit is
+        # skipped while a lottery is live (bot._timer) — simpler than
+        # restyling the warning around it.
+        status = f"🎰 Showdown — locks {rel(lot.deadline)}"
+    elif final_seconds:
         status = f"⏳ **FINAL SECONDS** — {status[0].lower()}{status[1:]}"
     embed.add_field(name="Status", value="⏸️ Paused" if paused else status)
     embed.set_footer(text=LOT_FOOTER)
@@ -316,6 +326,70 @@ def cancelled_lot_embed(lot: Lot) -> discord.Embed:
         title=f"🛑 CANCELLED — {lot.player.name} ({lot.player.pos})",
         description="The draft was cancelled with this player on the block.",
         color=RED,
+    )
+
+
+# ------------------------------------------------------- all-in showdown
+# Pure builders — every public showdown surface lives here so tests can
+# assert guess values never leak before the reveal.
+
+
+def showdown_open_text(lot: Lot) -> str:
+    assert lot.lottery is not None
+    names = " and ".join(f"<@{p}>" for p in lot.lottery.participants)
+    return (
+        f"🎰 **ALL-IN SHOWDOWN** — {names} are all-in at "
+        f"${lot.current_bid} on **{lot.player.name}**!"
+    )
+
+
+def showdown_embed(lot: Lot) -> discord.Embed:
+    # Both timestamp styles: :R ticks on desktop, :T is the absolute time
+    # for mobile clients that don't tick relative stamps.
+    return discord.Embed(
+        title="🎰 All-in showdown — closest number wins",
+        description=(
+            "Every stack is on the table, so luck breaks the tie. Tap "
+            "**🎲 Pick my number** and choose a number from **1 to 100** — "
+            "resubmitting overwrites, and picks stay secret until the "
+            "reveal. When the clock hits zero I draw a mystery number and "
+            f"the closest pick buys **{lot.player.name}** for "
+            f"**${lot.current_bid}**. No pick? I'll roll one for you.\n"
+            "A manager with a bigger budget can still break this up by "
+            "bidding higher on the lot card.\n\n"
+            f"🔒 Locks {rel(lot.deadline)} (at <t:{int(lot.deadline)}:T>)"
+        ),
+        color=GOLD,
+    )
+
+
+def lottery_joined_text(manager_id: int) -> str:
+    return f"🎰 <@{manager_id}> shoves their stack in — they're in the showdown!"
+
+
+def lottery_guessed_text(name: str) -> str:
+    return f"**{name}** locked in a number 🎲"
+
+
+def lottery_cancelled_text(name: str) -> str:
+    return f"💥 **{name}** broke up the showdown with a higher bid!"
+
+
+def lottery_reveal_embed(
+    fx: LotteryRevealFx, state: DraftState
+) -> discord.Embed:
+    lines = []
+    for mid, guess in fx.guesses:
+        manager = state.manager(mid)
+        name = manager.name if manager is not None else f"<@{mid}>"
+        line = f"{name} picked {guess} — off by {abs(guess - fx.mystery)}"
+        if mid == fx.winner_id:
+            line = f"🏆 **{line}**"
+        lines.append(line)
+    return discord.Embed(
+        title=f"🎰 The mystery number is… {fx.mystery}!",
+        description="\n".join(lines),
+        color=GOLD,
     )
 
 
@@ -555,6 +629,47 @@ class CustomBidButton(
         )
 
 
+class LotteryPickButton(
+    _FromIntGroups,
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"nba:lotto:(?P<thread>[0-9]+):(?P<lot>[0-9]+)",
+):
+    def __init__(self, thread_id: int, lot_seq: int) -> None:
+        super().__init__(_btn(
+            "🎲 Pick my number", discord.ButtonStyle.primary,
+            f"nba:lotto:{thread_id}:{lot_seq}",
+        ))
+        self.thread_id = thread_id
+        self.lot_seq = lot_seq
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        bot = _bot(interaction)
+        session = bot.sessions.get(self.thread_id)
+        if session is None:
+            await reply_ephemeral(interaction, bot.missing_session_message())
+            return
+        state = session.state
+        if (
+            state.phase != "auction"
+            or state.lot is None
+            or state.lot.seq != self.lot_seq
+            or state.lot.lottery is None
+        ):
+            await reply_ephemeral(interaction, "That showdown already closed.")
+            return
+        if state.paused:
+            await reply_ephemeral(interaction, "The draft is paused.")
+            return
+        # Participants only (the engine enforces this too).
+        if interaction.user.id not in state.lot.lottery.participants:
+            await reply_ephemeral(interaction, "You're not in this showdown.")
+            return
+        # send_modal must be the FIRST response to this interaction.
+        await interaction.response.send_modal(
+            LotteryGuessModal(self.thread_id, self.lot_seq)
+        )
+
+
 class LineupButton(
     _FromIntGroups,
     discord.ui.DynamicItem[discord.ui.Button],
@@ -576,6 +691,7 @@ DYNAMIC_ITEMS: tuple[type, ...] = (
     LeaveButton,
     QuickBidButton,
     CustomBidButton,
+    LotteryPickButton,
     LineupButton,
 )
 
@@ -603,6 +719,12 @@ def bid_view(
 def lineup_view(thread_id: int) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
     view.add_item(LineupButton(thread_id))
+    return view
+
+
+def lottery_view(thread_id: int, lot_seq: int) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(LotteryPickButton(thread_id, lot_seq))
     return view
 
 
@@ -724,6 +846,32 @@ class CustomBidModal(discord.ui.Modal, title="Custom bid"):
         )
 
 
+class LotteryGuessModal(discord.ui.Modal, title="All-in showdown"):
+    number: discord.ui.TextInput = discord.ui.TextInput(
+        label="Your number (1-100)",
+        placeholder="e.g. 42",
+        min_length=1,
+        max_length=3,
+    )
+
+    def __init__(self, thread_id: int, lot_seq: int) -> None:
+        super().__init__()
+        self.thread_id = thread_id
+        self.lot_seq = lot_seq
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            value = int(self.number.value.strip())
+        except ValueError:
+            await interaction.response.send_message(
+                "Enter a whole number from 1 to 100.", ephemeral=True
+            )
+            return
+        await _bot(interaction).handle_lottery_guess(
+            interaction, self.thread_id, self.lot_seq, value
+        )
+
+
 # ---------------------------------------------------------- effect renderer
 
 
@@ -815,6 +963,34 @@ async def _render_one(
             ).edit(content=pick_prompt(fx.manager_id, state.pick_deadline))
     elif isinstance(fx, AutoFilledFx):
         await session.thread.send(embed=autofill_embed(fx.assignments))
+    elif isinstance(fx, LotteryOpenedFx):
+        # New deadline + showdown status on the card, then the announcement
+        # with its persistent pick button. The lot card keeps its bid
+        # buttons — that's how a richer manager cancels the showdown.
+        await edit_lot(
+            session, lot_embed(fx.lot, 1 + len(state.queue)), clear=False
+        )
+        await session.thread.send(
+            content=showdown_open_text(fx.lot),
+            embed=showdown_embed(fx.lot),
+            view=lottery_view(session.thread_id, fx.lot.seq),
+        )
+    elif isinstance(fx, LotteryJoinedFx):
+        await session.thread.send(lottery_joined_text(fx.manager_id))
+    elif isinstance(fx, LotteryGuessedFx):
+        guesser = state.manager(fx.manager_id)
+        assert guesser is not None
+        await session.thread.send(lottery_guessed_text(guesser.name))
+    elif isinstance(fx, LotteryCancelledFx):
+        # The BidPlaced right behind this in the batch re-edits the lot
+        # card (new leader/price/deadline) — only the announcement is here.
+        canceller = state.manager(fx.manager_id)
+        assert canceller is not None
+        await session.thread.send(lottery_cancelled_text(canceller.name))
+    elif isinstance(fx, LotteryRevealFx):
+        # The engine emits this immediately before the SoldFx of the same
+        # batch, so the reveal always lands right above the sale.
+        await session.thread.send(embed=lottery_reveal_embed(fx, state))
     elif isinstance(fx, LineupPhaseFx):
         # Fire-and-forget: the button is stateless via its custom_id, so no
         # message id needs tracking — it keeps working across restarts.

@@ -15,6 +15,7 @@ from draftbot.models import (
     DraftState,
     Join,
     Leave,
+    LotteryGuess,
     Pause,
     Pick,
     Resume,
@@ -51,6 +52,22 @@ def assert_invariants(state: DraftState) -> None:
         )
     if state.phase == "auction":
         assert state.lot is not None
+    if state.lot is not None and state.lot.lottery is not None:
+        lottery = state.lot.lottery
+        assert state.phase == "auction", "showdown outside the auction"
+        assert len(lottery.participants) >= 2, "showdown needs 2+ entrants"
+        assert len(set(lottery.participants)) == len(lottery.participants)
+        assert lottery.participants[0] == state.lot.leader_id
+        for uid in lottery.participants:  # every entrant is all-in at the tie
+            m = state.manager(uid)
+            assert m is not None
+            assert m.budget == state.lot.current_bid > 0, (
+                "showdown participant not all-in at the tied amount"
+            )
+        guess_ids = [u for u, _ in lottery.guesses]
+        assert len(set(guess_ids)) == len(guess_ids), "duplicate guess entry"
+        assert set(guess_ids) <= set(lottery.participants), "outsider guess"
+        assert all(1 <= g <= 100 for _, g in lottery.guesses)
     if state.phase == "free_pick":
         assert len(state.active_managers) <= 1, "free_pick with 2+ actives"
     if state.phase == "lineup":
@@ -66,7 +83,8 @@ def assert_invariants(state: DraftState) -> None:
         )
 
 
-def play_draft(seed: int, n: int) -> None:
+def play_draft(seed: int, n: int) -> bool:
+    """Returns True when the draft entered at least one all-in showdown."""
     eng_rng = random.Random(seed)
     agent = random.Random(seed ^ 0xA5A5A5)
     cfg = Config()
@@ -74,10 +92,13 @@ def play_draft(seed: int, n: int) -> None:
     for uid in range(1, n + 1):
         state, _ = engine.apply(state, Join(uid, f"M{uid}"))
     now = 1_000.0
+    saw_lottery = False
 
     def step(event) -> None:
-        nonlocal state
+        nonlocal state, saw_lottery
         state, _ = engine.apply(state, event, eng_rng)
+        if state.lot is not None and state.lot.lottery is not None:
+            saw_lottery = True
         assert_invariants(state)
 
     step(Start(1, PLAYERS, now))
@@ -107,6 +128,24 @@ def play_draft(seed: int, n: int) -> None:
                 step(Resume(1, now))
             if agent.random() < 0.1:  # stale-deadline fire, must be a no-op
                 step(TimerExpired("lot", state.lot.seq, state.lot.deadline - 5.0, now))
+            # All-in tie? Tied stacks sometimes pile into the showdown...
+            lot = state.lot
+            if lot.lottery is None and lot.leader_id is not None:
+                leader = state.manager(lot.leader_id)
+                if leader.budget == lot.current_bid and agent.random() < 0.6:
+                    for m in state.managers:
+                        if m.budget == lot.current_bid and agent.random() < 0.8:
+                            step(Bid(m.user_id, lot.seq, now, amount=lot.current_bid))
+                            now += 0.1
+            # ...then guess (participants and gatecrashers, valid and not).
+            if state.lot.lottery is not None:
+                for _ in range(agent.randrange(4)):
+                    uid = agent.choice([*range(1, n + 1), 999])
+                    step(LotteryGuess(uid, state.lot.seq, agent.randrange(-3, 105), now))
+                    now += 0.1
+                if agent.random() < 0.15:  # a richer stack sometimes cancels
+                    uid = agent.randrange(1, n + 1)
+                    step(Bid(uid, state.lot.seq, now, amount=state.lot.current_bid + 1))
             deadline = state.lot.deadline
             now = max(now, deadline)
             step(TimerExpired("lot", state.lot.seq, deadline, now))
@@ -137,12 +176,16 @@ def play_draft(seed: int, n: int) -> None:
     assert state.phase == "complete"
     assert all(m.full for m in state.managers)
     assert state.lot_seq <= max_lots, "reveal bound exceeded"
+    return saw_lottery
 
 
 def test_random_agent_drafts():
     drafts = 0
+    lotteries = 0
     for round_ in range(43):  # 43 rounds x 7 sizes = 301 drafts
         for n in range(2, 9):
-            play_draft(round_ * 1_000 + n, n)
+            lotteries += play_draft(round_ * 1_000 + n, n)
             drafts += 1
     assert drafts >= 300
+    # The driver joins tied all-in stacks, so showdowns actually happen.
+    assert lotteries > 0, "no draft ever entered an all-in showdown"

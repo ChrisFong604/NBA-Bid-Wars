@@ -19,6 +19,11 @@ from draftbot.models import (
     LineupPhaseFx,
     LogEntry,
     Lot,
+    LotteryCancelledFx,
+    LotteryGuessedFx,
+    LotteryJoinedFx,
+    LotteryOpenedFx,
+    LotteryRevealFx,
     Manager,
     PassedFx,
     PausedFx,
@@ -70,7 +75,19 @@ def _manager_view(m: Manager) -> dict[str, Any]:
     }
 
 
-def _lot_view(lot: Lot) -> dict[str, Any]:
+def _lot_view(lot: Lot, viewer_id: int | None) -> dict[str, Any]:
+    # Showdown redaction: `entered` (who locked in) is public — it mirrors
+    # LotteryGuessedFx — but the only guess VALUE ever serialized is the
+    # viewer's own. Rivals' numbers stay server-side until LotteryRevealFx.
+    lottery: dict[str, Any] | None = None
+    if lot.lottery is not None:
+        lottery = {
+            "participants": list(lot.lottery.participants),
+            "entered": [uid for uid, _ in lot.lottery.guesses],
+            "your_guess": next(
+                (g for uid, g in lot.lottery.guesses if uid == viewer_id), None
+            ),
+        }
     return {
         "seq": lot.seq,
         "player": player_view(lot.player),
@@ -78,6 +95,7 @@ def _lot_view(lot: Lot) -> dict[str, Any]:
         "current_bid": lot.current_bid,
         "leader": lot.leader_id,
         "deadline": lot.deadline,
+        "lottery": lottery,
     }
 
 
@@ -122,7 +140,7 @@ def state_view(state: DraftState, viewer_id: int | None) -> dict[str, Any]:
         "queue_count": len(state.queue),
         "managers": [_manager_view(m) for m in state.managers],
         "lot": (
-            _lot_view(state.lot)
+            _lot_view(state.lot, viewer_id)
             if state.phase == "auction" and state.lot is not None
             else None
         ),
@@ -171,6 +189,36 @@ def fx_view(effect: Effect) -> dict[str, Any] | None:
                 {"manager": manager_id, "player": player_view(p)}
                 for manager_id, p in effect.assignments
             ],
+        }
+    if isinstance(effect, LotteryOpenedFx):
+        lo = effect.lot.lottery
+        return {
+            "kind": "lottery_open",
+            "participants": list(lo.participants) if lo is not None else [],
+            "amount": effect.lot.current_bid,
+            "deadline": effect.lot.deadline,
+        }
+    if isinstance(effect, LotteryJoinedFx):
+        lo = effect.lot.lottery
+        return {
+            "kind": "lottery_joined",
+            "manager": effect.manager_id,
+            "participants": list(lo.participants) if lo is not None else [],
+        }
+    if isinstance(effect, LotteryGuessedFx):
+        # WHO locked in is public; the number never rides an fx pre-reveal.
+        return {"kind": "lottery_guessed", "manager": effect.manager_id}
+    if isinstance(effect, LotteryCancelledFx):
+        return {"kind": "lottery_cancelled", "manager": effect.manager_id}
+    if isinstance(effect, LotteryRevealFx):
+        # The reveal is the moment guesses go public — full list on purpose.
+        return {
+            "kind": "lottery_reveal",
+            "mystery": effect.mystery,
+            "guesses": [
+                {"manager": uid, "guess": g} for uid, g in effect.guesses
+            ],
+            "winner": effect.winner_id,
         }
     if isinstance(effect, LineupPhaseFx):
         return {"kind": "lineup_open", "deadline": effect.deadline}

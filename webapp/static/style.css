@@ -288,6 +288,31 @@ label > input, label > select { margin-top: 4px; }
 #bid-amount { width: 90px; flex: 1; max-width: 130px; }
 #bid-note { flex-basis: 100%; }
 
+/* ------------------------------------------------------------- showdown */
+
+#showdown {
+  margin-top: 10px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  animation: fade-in 0.35s ease-out;
+}
+.sd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+}
+#sd-form { display: flex; gap: 8px; margin-top: 10px; }
+#sd-guess { width: 110px; flex: none; }
+#sd-note { margin-top: 6px; }
+
+.reveal-head { font-weight: 700; margin-bottom: 4px; }
+.reveal-row { display: flex; justify-content: space-between; gap: 10px; }
+.reveal-row.win { color: var(--accent); font-weight: 700; }
+
 /* ---------------------------------------------------------- stage views */
 
 .stage-block { margin-top: 4px; }

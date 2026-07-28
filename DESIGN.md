@@ -54,7 +54,8 @@ an LLM ranking) and crowns a champion.
 7. **Bidding:** all bids race the same flat clock — nothing resets it. When it
    expires, the high bidder wins (no bid → #6).
 8. **Bid validity:**
-   - Integer dollars, strictly greater than the current bid.
+   - Integer dollars, strictly greater than the current bid (one exception:
+     a tied all-in match opens a showdown, #19).
    - **No reserve — your money is yours to burn.** Max bid = your entire
      remaining budget; nothing protects you from yourself. The price of going
      broke is #11: no more bidding, and your empty slots get filled randomly at
@@ -123,6 +124,27 @@ prompt/results go out with the **final** lineups.
 18. `/draft pause`, `/draft resume`, `/draft addtime <s>`, `/draft kick`,
     `/draft cancel` (destructive ones behind a confirm button). Commissioner is
     the creator; `Manage Server` permission is the fallback.
+
+### The all-in showdown
+19. **Tied all-in stacks break on luck, not speed.** Without this rule, when
+    managers are tied at the same remaining budget the first to bid their
+    whole stack wins unchallengeably (#8 requires strictly greater). So: when
+    the leader's bid equals their **entire** remaining budget and another
+    manager whose budget is **exactly** that amount bids it (a quick-button
+    increment landing on it, or a Custom bid equal to it), the lot flips into
+    a **🎰 showdown** instead of a rejection — a 15s countdown
+    (`Config.lottery_seconds`) replaces the lot clock, and any further tied
+    all-in manager who bids the amount joins while it runs (deadline
+    unchanged). Participants each pick a secret number 1–100 via **🎲 Pick my
+    number** (resubmission overwrites; a missing pick is rolled randomly —
+    nobody forfeits to a fumbled UI). At zero the bot draws a mystery number;
+    the closest pick (distance ties re-rolled by the bot) buys the player at
+    the tied amount, then the normal sold flow runs. A manager with a bigger
+    budget cancels the showdown at any time by bidding higher on the lot
+    card — normal bidding resumes with a fresh 10s window. Pause/resume/
+    addtime act on the showdown clock like any lot clock; LAST CALL lots can
+    have showdowns too; leaving mid-showdown doesn't withdraw the entry
+    (same as a standing bid, #16).
 
 ---
 

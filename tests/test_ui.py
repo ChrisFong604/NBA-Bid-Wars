@@ -10,7 +10,16 @@ import sys
 import pytest
 
 from draftbot import ui
-from draftbot.models import Config, DraftState, Lot, Manager, Player, Spot
+from draftbot.models import (
+    Config,
+    DraftState,
+    Lot,
+    Lottery,
+    LotteryRevealFx,
+    Manager,
+    Player,
+    Spot,
+)
 
 # (class, sample constructor args) — every registered DynamicItem.
 DYNAMIC_CASES = [
@@ -18,6 +27,7 @@ DYNAMIC_CASES = [
     (ui.LeaveButton, (123,)),
     (ui.QuickBidButton, (123, 7, 5)),
     (ui.CustomBidButton, (123, 7)),
+    (ui.LotteryPickButton, (123, 7)),
     (ui.LineupButton, (123,)),
 ]
 
@@ -54,6 +64,7 @@ def test_persistent_views_never_time_out():
     assert ui.lobby_view(1).timeout is None
     assert ui.bid_view(1, 2, (1, 2, 5)).timeout is None
     assert ui.lineup_view(1).timeout is None
+    assert ui.lottery_view(1, 2).timeout is None
 
 
 def test_bid_view_layout():
@@ -185,6 +196,83 @@ def test_teams_for_sim_carries_decade_and_prime():
 
 def test_config_default_sim_is_prompt():
     assert Config().sim == "prompt"
+
+
+# --------------------------------------------------------- all-in showdown
+
+
+# Sentinel guess 77 appears nowhere else in the fixtures — if it shows up in
+# any pre-reveal public surface, a secret leaked.
+SHOWDOWN_LOT = Lot(
+    seq=3, player=JORDAN, last_call=False, current_bid=5, leader_id=2,
+    deadline=1_000.0, lottery=Lottery(participants=(2, 3), guesses=((2, 77),)),
+)
+
+
+def test_lot_embed_showdown_status_line():
+    embed = ui.lot_embed(SHOWDOWN_LOT, pool_left=10)
+    status = next(f.value for f in embed.fields if f.name == "Status")
+    assert status == "🎰 Showdown — locks <t:1000:R>"
+
+
+def test_lot_embed_showdown_beats_final_seconds_styling():
+    # bot._timer skips the warning edit during a lottery; even if the flag
+    # sneaks through, the showdown status must win.
+    embed = ui.lot_embed(SHOWDOWN_LOT, pool_left=10, final_seconds=True)
+    status = next(f.value for f in embed.fields if f.name == "Status")
+    assert "FINAL SECONDS" not in status
+    assert status == "🎰 Showdown — locks <t:1000:R>"
+
+
+def test_showdown_open_text_names_stakes_and_player():
+    assert ui.showdown_open_text(SHOWDOWN_LOT) == (
+        "🎰 **ALL-IN SHOWDOWN** — <@2> and <@3> are all-in at $5 "
+        "on **Michael Jordan**!"
+    )
+
+
+def test_showdown_embed_explains_rules_with_both_timestamp_forms():
+    embed = ui.showdown_embed(SHOWDOWN_LOT)
+    assert "1 to 100" in embed.description
+    assert "mystery number" in embed.description
+    assert "$5" in embed.description and "Michael Jordan" in embed.description
+    # Mobile clients don't tick <t:..:R> — the absolute :T form must be there.
+    assert "<t:1000:R>" in embed.description
+    assert "<t:1000:T>" in embed.description
+
+
+def _showdown_state() -> DraftState:
+    empty = tuple(Spot(slot=s) for s in ("PG", "SG", "SF", "PF", "C"))
+    return DraftState(
+        config=Config(),
+        commissioner_id=2,
+        managers=(
+            Manager(user_id=2, name="Ann", budget=5, spots=empty),
+            Manager(user_id=3, name="Bob", budget=5, spots=empty),
+        ),
+    )
+
+
+def test_lottery_reveal_embed_shows_mystery_guesses_and_winner():
+    fx = LotteryRevealFx(mystery=40, guesses=((2, 33), (3, 55)), winner_id=2)
+    embed = ui.lottery_reveal_embed(fx, _showdown_state())
+    assert "40" in embed.title
+    assert "🏆 **Ann picked 33 — off by 7**" in embed.description
+    assert "Bob picked 55 — off by 15" in embed.description
+
+
+def test_guess_values_never_leak_before_the_reveal():
+    # Every public builder that can render while guesses exist, dumped whole.
+    surfaces = [
+        str(ui.lot_embed(SHOWDOWN_LOT, pool_left=10).to_dict()),
+        ui.showdown_open_text(SHOWDOWN_LOT),
+        str(ui.showdown_embed(SHOWDOWN_LOT).to_dict()),
+        ui.lottery_joined_text(3),
+        ui.lottery_guessed_text("Ann"),
+        ui.lottery_cancelled_text("Rich"),
+    ]
+    for surface in surfaces:
+        assert "77" not in surface
 
 
 # ------------------------------------------------------------------- lineup

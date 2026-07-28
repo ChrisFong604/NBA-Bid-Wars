@@ -125,6 +125,17 @@
     <section id="stage-col">
       <div id="lot-zone" hidden>
         <div id="lot-slot"></div>
+        <div id="showdown" hidden>
+          <div class="sd-head">
+            <span id="sd-banner"></span>
+            <span id="sd-clock" class="countdown"></span>
+          </div>
+          <form id="sd-form" hidden>
+            <input id="sd-guess" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="1–100" aria-label="Your secret number">
+            <button id="sd-lock" type="submit" class="primary">🔒 Lock in</button>
+          </form>
+          <div id="sd-note" class="muted small"></div>
+        </div>
         <div id="bidbar">
           <button class="bid-quick" data-inc="1">+$1</button>
           <button class="bid-quick" data-inc="2">+$2</button>

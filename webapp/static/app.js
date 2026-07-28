@@ -260,6 +260,15 @@ function fxLines(fx) {
     case "autofill":
       return fx.assignments.map(
         (a) => `🤖 ${a.player.name} auto-filled → ${mgrName(a.manager)}`);
+    case "lottery_open":
+      return [`🎰 ALL-IN SHOWDOWN — ${fx.participants.map(mgrName).join(" vs ")}` +
+              ` tied at $${fx.amount}!`];
+    case "lottery_joined":
+      return [`🎰 ${mgrName(fx.manager)} joins the showdown!`];
+    case "lottery_guessed":
+      return [`🔒 ${mgrName(fx.manager)} locked in a number`];
+    case "lottery_cancelled":
+      return [`💥 ${mgrName(fx.manager)} outbid the tie — showdown off!`];
     case "lineup_open":
       return ["🧩 Rosters full — arrange your lineup!"];
     case "complete":
@@ -279,6 +288,11 @@ function fxLines(fx) {
 
 function handleFx(fxList) {
   for (const fx of fxList) {
+    if (fx.kind === "lottery_reveal") { // result card, not a one-liner
+      feedPush(revealCard(fx));
+      toast(`🎰 Mystery number: ${fx.mystery} — ${mgrName(fx.winner)} wins!`);
+      continue;
+    }
     const lines = fxLines(fx);
     for (const line of lines) feedPush(line);
     if (fx.kind === "autofill" && fx.assignments.length > 1) {
@@ -385,6 +399,7 @@ function renderStage(st) {
   if (st.phase === "auction" && st.lot) {
     zone.hidden = false;
     renderLot(st);
+    updateShowdown(st);
     updateBidBar(st);
     stage.replaceChildren();
     return;
@@ -434,7 +449,10 @@ function updateBidBar(st) {
   const me = st.managers.find((m) => m.id === st.you);
   const full = me != null && me.spots.every((s) => s.player);
   const leading = me != null && lot.leader === me.id;
-  // Cosmetic only — the engine re-validates every bid.
+  const inShowdown =
+    lot.lottery != null && me != null && lot.lottery.participants.includes(me.id);
+  // Cosmetic only — the engine re-validates every bid. Richer managers keep
+  // live bid controls during a showdown (outbidding cancels it).
   const blocked = (need) =>
     me == null || leading || full || me.budget < lot.current_bid + need;
   for (const btn of document.querySelectorAll(".bid-quick")) {
@@ -445,9 +463,56 @@ function updateBidBar(st) {
   $("bid-note").textContent =
     me == null ? "Spectating"
       : full ? "Roster full"
+      : inShowdown ? "🎰 You're in the showdown — lock in your number!"
       : leading ? "You lead 👑"
       : me.budget <= lot.current_bid ? `Priced out — $${me.budget} left`
       : `$${me.budget} left`;
+}
+
+// --------------------------------------------------------------- showdown
+
+function updateShowdown(st) {
+  const box = $("showdown");
+  const lo = st.lot?.lottery;
+  if (!lo) {
+    box.hidden = true;
+    $("sd-clock").dataset.deadline = "";
+    return;
+  }
+  box.hidden = false;
+  // All names flow through textContent — never markup.
+  $("sd-banner").textContent =
+    `🎰 ALL-IN SHOWDOWN — ${lo.participants.map(mgrName).join(" vs ")} ` +
+    `tied at $${st.lot.current_bid}. Closest guess to the mystery ` +
+    "number (1–100) wins the player!";
+  $("sd-clock").dataset.deadline = st.lot.deadline;
+  const mine = st.you != null && lo.participants.includes(st.you);
+  $("sd-form").hidden = !mine;
+  const note = $("sd-note");
+  if (mine) {
+    note.textContent = lo.your_guess != null
+      ? `✓ Locked in: ${lo.your_guess} — you can change it until the reveal.`
+      : "Pick a number and lock it in — it stays secret until the reveal.";
+    return;
+  }
+  const me = st.managers.find((m) => m.id === st.you);
+  const canCancel =
+    me != null && !me.autopilot && me.budget > st.lot.current_bid &&
+    !me.spots.every((s) => s.player);
+  note.textContent =
+    `${lo.entered.length}/${lo.participants.length} locked in` +
+    (canCancel ? ` — outbid $${st.lot.current_bid} to cancel the showdown.` : ".");
+}
+
+function revealCard(fx) {
+  return el("div", { class: "reveal-card" },
+    el("div", { class: "reveal-head" }, `🎰 Mystery number: ${fx.mystery}`),
+    fx.guesses.map((g) => el("div",
+      { class: `reveal-row${g.manager === fx.winner ? " win" : ""}` },
+      el("span", {},
+        `${g.manager === fx.winner ? "🏆 " : ""}${mgrName(g.manager)}`),
+      el("span", { class: "muted" },
+        `guessed ${g.guess} · off by ${Math.abs(g.guess - fx.mystery)}`))));
 }
 
 // -------------------------------------------------------------- free pick
@@ -760,6 +825,13 @@ function wireGame() {
     if (!lot || !Number.isFinite(amount) || amount < 1) return;
     send({ action: "bid", amount, lot_seq: lot.seq });
     $("bid-amount").value = "";
+  });
+  $("sd-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const lot = S.state?.lot;
+    const number = Math.floor(Number($("sd-guess").value));
+    if (!lot || !Number.isFinite(number) || number < 1 || number > 100) return;
+    send({ action: "guess", number, lot_seq: lot.seq });
   });
   $("btn-start").addEventListener("click", () => send({ action: "start" }));
   $("btn-pause").addEventListener("click", () => send({ action: "pause" }));

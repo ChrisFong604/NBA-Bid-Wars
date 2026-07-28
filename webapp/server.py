@@ -23,6 +23,7 @@ from draftbot.models import (
     Join,
     Kick,
     Leave,
+    LotteryGuess,
     Pause,
     Pick,
     Resume,
@@ -219,6 +220,18 @@ def _build_event(
             increment=None if amount is not None else increment,
             amount=amount,
         )
+    if action == "guess":  # all-in showdown pick — engine gates participants
+        number = data.get("number")
+        if isinstance(number, bool) or not isinstance(number, int):
+            return None
+        raw_seq = data.get("lot_seq")
+        lot = room.state.lot
+        lot_seq = (
+            raw_seq
+            if isinstance(raw_seq, int)
+            else (lot.seq if lot is not None else -1)
+        )
+        return LotteryGuess(user_id=actor, lot_seq=lot_seq, guess=number, now=now)
     if action == "pick":
         player_id = data.get("player_id")
         if not isinstance(player_id, str):

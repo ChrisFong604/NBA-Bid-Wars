@@ -38,6 +38,7 @@ class Config:
     lot_seconds: int = 30  # clock per lot; only late bids extend it (soft close)
     snipe_window: float = 10.0  # a bid this close to the deadline...
     snipe_extend: float = 5.0  # ...pushes the deadline out by this much
+    lottery_seconds: float = 15.0  # all-in showdown countdown
     quick_bids: tuple[int, ...] = (1, 2, 5)
     min_managers: int = 2
     max_managers: int = 10
@@ -75,6 +76,20 @@ class Manager:
 
 
 @dataclass(frozen=True)
+class Lottery:
+    """All-in showdown: 2+ managers tied at their entire remaining budget.
+
+    Participants pick 1-100; at the deadline the engine draws a mystery
+    number and the closest guess buys the player at the tied amount. The
+    leader is always participants[0]. Guesses are (user_id, number) pairs —
+    private until the reveal. The countdown lives in ``Lot.deadline`` so
+    pause/addtime/stale-timer machinery works unchanged."""
+
+    participants: tuple[int, ...]
+    guesses: tuple[tuple[int, int], ...] = ()
+
+
+@dataclass(frozen=True)
 class Lot:
     seq: int
     player: Player
@@ -82,6 +97,7 @@ class Lot:
     current_bid: int = 0  # 0 = no opening bid yet (opening window)
     leader_id: int | None = None
     deadline: float = 0.0  # epoch seconds; authoritative over any client render
+    lottery: Lottery | None = None  # live all-in showdown, else None
 
 
 @dataclass(frozen=True)
@@ -169,6 +185,16 @@ class TimerExpired:
 
 
 @dataclass(frozen=True)
+class LotteryGuess:
+    """A showdown participant locks in (or overwrites) their 1-100 number."""
+
+    user_id: int
+    lot_seq: int
+    guess: int
+    now: float
+
+
+@dataclass(frozen=True)
 class Pick:
     user_id: int
     player_id: str
@@ -209,8 +235,8 @@ class Cancel:
 
 
 Event = (
-    Join | Leave | Start | Bid | TimerExpired | Pick | Swap | Pause | Resume
-    | Kick | Cancel
+    Join | Leave | Start | Bid | TimerExpired | LotteryGuess | Pick | Swap
+    | Pause | Resume | Kick | Cancel
 )
 
 
@@ -264,6 +290,34 @@ class PickedFx:
 @dataclass(frozen=True)
 class AutoFilledFx:
     assignments: tuple[tuple[int, Player], ...]  # (manager_id, player)
+
+
+@dataclass(frozen=True)
+class LotteryOpenedFx:  # all-in tie — showdown countdown started
+    lot: Lot  # lot.lottery set; lot.deadline is the showdown deadline
+
+
+@dataclass(frozen=True)
+class LotteryJoinedFx:  # another tied all-in manager entered the showdown
+    lot: Lot
+    manager_id: int
+
+
+@dataclass(frozen=True)
+class LotteryGuessedFx:  # participant locked in a number (value stays hidden)
+    manager_id: int
+
+
+@dataclass(frozen=True)
+class LotteryCancelledFx:  # a richer manager outbid the tied stacks
+    manager_id: int  # who cancelled it (the new leader)
+
+
+@dataclass(frozen=True)
+class LotteryRevealFx:  # showdown resolved — followed by a SoldFx
+    mystery: int
+    guesses: tuple[tuple[int, int], ...]  # (manager_id, number), all filled
+    winner_id: int
 
 
 @dataclass(frozen=True)
@@ -326,7 +380,8 @@ class LobbyFx:  # lobby membership changed; re-render the lobby message
 
 Effect = (
     LotOpened | BidPlaced | SoldFx | PassedFx | ForceAssignedFx | FreePickFx
-    | PickedFx | AutoFilledFx | LineupPhaseFx | CompleteFx | ArmTimerFx
-    | CancelTimerFx | BoardFx | ErrorFx | AutopilotFx | PausedFx | ResumedFx
-    | CancelledFx | LobbyFx
+    | PickedFx | AutoFilledFx | LotteryOpenedFx | LotteryJoinedFx
+    | LotteryGuessedFx | LotteryCancelledFx | LotteryRevealFx | LineupPhaseFx
+    | CompleteFx | ArmTimerFx | CancelTimerFx | BoardFx | ErrorFx
+    | AutopilotFx | PausedFx | ResumedFx | CancelledFx | LobbyFx
 )

@@ -17,6 +17,7 @@ from .models import (
     DraftState,
     LogEntry,
     Lot,
+    Lottery,
     Manager,
     Player,
     Spot,
@@ -52,6 +53,16 @@ def _manager(d: dict[str, Any]) -> Manager:
     )
 
 
+def _lottery(d: dict[str, Any] | None) -> Lottery | None:
+    if d is None:
+        return None
+    return Lottery(
+        participants=tuple(int(p) for p in d["participants"]),
+        # JSON turns the (uid, number) pairs into 2-lists — coerce back.
+        guesses=tuple((int(u), int(g)) for u, g in d["guesses"]),
+    )
+
+
 def _lot(d: dict[str, Any] | None) -> Lot | None:
     if d is None:
         return None
@@ -64,6 +75,8 @@ def _lot(d: dict[str, Any] | None) -> Lot | None:
         current_bid=d["current_bid"],
         leader_id=d["leader_id"],
         deadline=d["deadline"],
+        # Pre-showdown snapshots omit the key -> no live lottery.
+        lottery=_lottery(d.get("lottery")),
     )
 
 
