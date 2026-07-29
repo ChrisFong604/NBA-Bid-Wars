@@ -121,6 +121,35 @@ def test_lineup_phase_snapshot_roundtrips(tmp_path):
     assert meta == {"thread_id": 7}
 
 
+def test_cpu_flag_roundtrips_and_defaults_false_on_old_snapshots(tmp_path):
+    """Manager.cpu must survive save/load (recovery restarts the CPU driver
+    off this flag, and ui.display renders CPUs plain off it); snapshots
+    written before the CPU feature omit the key -> human manager."""
+    cfg = Config()
+    state = DraftState(
+        config=cfg,
+        commissioner_id=1,
+        managers=(
+            make_manager(1, cfg),
+            dataclasses.replace(
+                make_manager(-1, cfg), name="CPU 1", cpu=True
+            ),
+        ),
+    )
+    path = tmp_path / "snap.json"
+    save_snapshot(path, state, {"thread_id": 1})
+    loaded, _ = load_snapshot(path)
+    assert loaded == state
+    assert [m.cpu for m in loaded.managers] == [False, True]
+    # Old snapshot: no "cpu" key on managers at all.
+    payload = {"state": state_to_dict(state), "meta": {"v": 1}}
+    for m in payload["state"]["managers"]:
+        del m["cpu"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    old, _ = load_snapshot(path)
+    assert all(not m.cpu for m in old.managers)
+
+
 def lottery_state():
     """rich_state's live lot (leader 3 at $2) with a showdown in flight."""
     state = rich_state()

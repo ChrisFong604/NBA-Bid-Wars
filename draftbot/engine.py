@@ -12,6 +12,7 @@ from dataclasses import replace
 
 from .models import (
     SLOTS,
+    AddCpu,
     ArmTimerFx,
     AutoFilledFx,
     AutopilotFx,
@@ -51,6 +52,7 @@ from .models import (
     Pick,
     PickedFx,
     Player,
+    RemoveCpu,
     Resume,
     ResumedFx,
     SoldFx,
@@ -98,6 +100,10 @@ def apply(
         return _resume(state, event)
     if isinstance(event, Kick):
         return _kick(state, event)
+    if isinstance(event, AddCpu):
+        return _add_cpu(state, event)
+    if isinstance(event, RemoveCpu):
+        return _remove_cpu(state, event)
     if isinstance(event, Cancel):
         return _cancel(state, event)
     raise TypeError(f"unknown event: {event!r}")
@@ -722,6 +728,52 @@ def _kick(state: DraftState, ev: Kick) -> Transition:
     m2 = replace(target, autopilot=True)
     state2 = _with_manager(state, m2)
     return state2, [AutopilotFx(ev.target_id), BoardFx()]
+
+
+def _add_cpu(state: DraftState, ev: AddCpu) -> Transition:
+    """Seat computer opponents (rule #20): lobby-only, commissioner-only.
+    CPU n gets user_id -n; numbering fills the lowest free slot."""
+    if ev.user_id != state.commissioner_id:
+        return _err(state, ev.user_id, "Only the commissioner can add CPUs.")
+    if state.phase != "lobby":
+        return _err(state, ev.user_id, "The draft has already started.")
+    if ev.count < 1:
+        return _err(state, ev.user_id, "Add at least one CPU.")
+    room = state.config.max_managers - len(state.managers)
+    if ev.count > room:
+        return _err(
+            state, ev.user_id,
+            f"Not enough room — only {room} seat(s) left in the lobby.",
+        )
+    used = {-m.user_id for m in state.managers if m.user_id < 0}
+    new: list[Manager] = []
+    n = 1
+    for _ in range(ev.count):
+        while n in used:
+            n += 1
+        used.add(n)
+        new.append(
+            Manager(
+                user_id=-n,
+                name=f"CPU {n}",
+                budget=state.config.budget,
+                spots=tuple(Spot(slot=s) for s in state.config.slots),
+                cpu=True,
+            )
+        )
+    return replace(state, managers=state.managers + tuple(new)), [LobbyFx()]
+
+
+def _remove_cpu(state: DraftState, ev: RemoveCpu) -> Transition:
+    if ev.user_id != state.commissioner_id:
+        return _err(state, ev.user_id, "Only the commissioner can remove CPUs.")
+    if state.phase != "lobby":
+        return _err(state, ev.user_id, "The draft has already started.")
+    target = state.manager(ev.cpu_id)
+    if target is None or not target.cpu:
+        return _err(state, ev.user_id, "That's not a CPU manager.")
+    managers = tuple(m for m in state.managers if m.user_id != ev.cpu_id)
+    return replace(state, managers=managers), [LobbyFx()]
 
 
 def _cancel(state: DraftState, ev: Cancel) -> Transition:

@@ -27,6 +27,24 @@ gets `{room, token, user_id}`; `POST /api/rooms/{code}/join` with
 `localStorage`; rejoining with a token reattaches to the same manager
 (mirrors the bot's Join-reclaim rules — engine decides, not the server).
 
+`POST /api/rooms` also accepts `"cpus"` (int 0–8, default 0): the room is
+pre-seeded with that many computer opponents, applied right after creation
+as an `AddCpu` event through the normal dispatch (the engine gates
+capacity, not the server).
+
+## CPU opponents
+
+CPU managers are ORDINARY managers inside the engine — negative
+`user_id`s, `"cpu": true` in the manager view (public wire data; there is
+nothing to redact), and every rule applies to them unchanged (bidding,
+soft close, all-in showdowns, going broke, free pick, force-assign). The
+server runs one per-room driver task (started when the draft starts if any
+manager is a CPU) that polls the pure brain `draftbot.cpu.decide(state,
+cpu_id, now)` outside the room lock and submits its chosen events through
+the same dispatch as human actions — the engine remains the single
+authority. Their bids/picks reach clients as perfectly ordinary `state`
+broadcasts and `fx` payloads.
+
 ## Redacted state view — `views.state_view(state, viewer_id)`
 
 NEVER serialize `state.queue` contents. The hidden pool is the whole game.
@@ -38,6 +56,7 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
               "era_end": 2020, "sim": "prompt", "lineup_seconds": 60},
   "queue_count": 12,
   "managers": [{"id": 1, "name": "Chris", "budget": 7, "autopilot": false,
+                 "cpu": false,
                  "spots": [{"slot": "PG", "player": {...} | null, "price": 3}]}],
   "lot": {"seq": 4, "player": {"name": "Michael Jordan", "pos": "SG",
            "team": "CHI", "ppg": 31.5, "rpg": 6.3, "apg": 5.5, "stars": 5,
@@ -97,6 +116,10 @@ Client→server messages (server maps to engine events verbatim):
 - `{"action": "swap", "a": "PG", "b": "C"}`
 - `{"action": "pause"} {"action": "resume"} {"action": "addtime",
    "seconds": 30} {"action": "kick", "target": 4} {"action": "cancel"}`
+- `{"action": "add_cpu", "count": 1}` / `{"action": "remove_cpu",
+   "cpu_id": -2}` — commissioner seats/removes computer opponents
+   (lobby only; the engine gates commissioner, phase, and capacity —
+   `count` defaults to 1).
 - `{"action": "leave"}` (lobby only — engine rule).
 
 Engine `Bid/Pick/...` events carry `now=time.time()` server-side. The
@@ -114,7 +137,9 @@ or any manager, matching `/simulate`'s draft-member gate).
 ## Web-first UX requirements (frontend)
 
 - Lobby: create form (budget / clock / era range / sim mode / lineup
-  window), shareable room link (`/#K7QX`), join by name.
+  window / CPU opponents 0–8), shareable room link (`/#K7QX`), join by
+  name. The commissioner gets an "Add CPU 🤖" button plus a per-CPU
+  remove ✖; CPU managers render with 🤖 in the lobby list and board.
 - Auction: lot card with LIVE ticking countdown (client-side), +$1/+$2/+$5
   and custom-amount bid controls, board sidebar ALWAYS visible (managers,
   budgets, rosters), scrolling event feed. Layout: sidebar + main on

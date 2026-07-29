@@ -122,7 +122,11 @@ private GitHub repo, clone with a fine-grained token URL
    may not be feasible, in which case `/draft start` asks you to widen the
    range or shrink the lobby. It spawns a `🏀 Draft — <date>` thread with a
    lobby; the creator is the commissioner.
-2. Everyone clicks **Join** in the lobby (2–10 managers).
+2. Everyone clicks **Join** in the lobby (2–10 managers). Short on humans?
+   The commissioner can seat computer opponents with `/draft addcpu [count]`
+   — CPUs are ordinary managers (they bid, join showdowns, go broke, and
+   free-pick like anyone else), so a solo 1v1 works: you plus one CPU.
+   `/draft removecpu` removes the newest one.
 3. The commissioner runs `/draft start`. The board tracks budgets and
    rosters and is reposted at the bottom of the thread after every sale.
 4. Bid with **+$1 / +$2 / +$5** or **Custom…** on each lot card. The high bidder
@@ -148,7 +152,8 @@ private GitHub repo, clone with a fine-grained token URL
    stats with a note when `LLM_API_KEY` is unset. Re-run (or re-post) any
    time with `/simulate`.
 
-Commissioner tools: `/draft pause`, `/draft resume`, `/draft addtime`,
+Commissioner tools: `/draft addcpu [count]`, `/draft removecpu`,
+`/draft pause`, `/draft resume`, `/draft addtime`,
 `/draft kick @user [replacement]`, `/draft cancel`. Anyone: `/swap`,
 `/status`, `/pick` (picker only).
 

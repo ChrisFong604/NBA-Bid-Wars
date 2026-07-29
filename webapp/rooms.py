@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from draftbot import engine, sim
+from draftbot import cpu, engine, sim
 from draftbot.models import (
     ArmTimerFx,
     CancelTimerFx,
@@ -66,6 +66,7 @@ class Room:
     tokens: dict[str, int] = field(default_factory=dict)  # token -> uid
     timer_task: asyncio.Task | None = None
     sim_task: asyncio.Task | None = None
+    cpu_task: asyncio.Task | None = None
     next_user_id: int = 1
     created: float = field(default_factory=time.time)
     last_active: float = field(default_factory=time.time)
@@ -127,6 +128,8 @@ class RoomRegistry:
                     room.timer_task.cancel()
                 if room.sim_task is not None:
                     room.sim_task.cancel()
+                if room.cpu_task is not None:
+                    room.cpu_task.cancel()
                 del self.rooms[code]
 
     # ------------------------------------------------------------- dispatch
@@ -147,6 +150,7 @@ class RoomRegistry:
         await self._send_effects(room, effects)
         if any(isinstance(fx, CompleteFx) for fx in effects):
             self.start_sim(room)
+        self._ensure_cpu_driver(room)
         return effects
 
     def _apply_timer_effects(
@@ -220,6 +224,37 @@ class RoomRegistry:
             room.last_active = time.time()
         await self._broadcast_state(room)
         return None
+
+    # ------------------------------------------------------------ cpu driver
+
+    def _ensure_cpu_driver(self, room: Room) -> None:
+        """Start the per-room CPU task when the draft is live and any manager
+        is a CPU (called after every commit, so it also self-heals). Same
+        shape as the timer task; it exits on complete/cancelled and is
+        cancelled on eviction."""
+        if room.cpu_task is not None and not room.cpu_task.done():
+            return
+        if room.state.phase not in ("auction", "free_pick"):
+            return
+        if not any(m.cpu for m in room.state.managers):
+            return
+        room.cpu_task = self._spawn(self._cpu_driver(room))
+
+    async def _cpu_driver(self, room: Room) -> None:
+        """Poll each CPU brain OUTSIDE the lock (room.state is an immutable
+        snapshot) and submit its chosen events through the normal dispatch —
+        the engine stays the single authority; stale decisions just bounce
+        off its guards like any late human click."""
+        while room.state.phase in ("auction", "free_pick"):
+            delays = [cpu.IDLE_DELAY]
+            for m in room.state.managers:
+                if not m.cpu:
+                    continue
+                event, delay = cpu.decide(room.state, m.user_id, time.time())
+                delays.append(delay)
+                if event is not None:
+                    await self.dispatch(room, event)
+            await asyncio.sleep(max(0.5, min(delays)))
 
     # ------------------------------------------------------------ broadcast
 

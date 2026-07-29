@@ -59,12 +59,13 @@ class Spot:
 
 @dataclass(frozen=True)
 class Manager:
-    user_id: int
+    user_id: int  # Discord/web ids are positive; CPU managers are negative
     name: str
     budget: int
     spots: tuple[Spot, ...]
     autopilot: bool = False
     last_action_lot: int = 0
+    cpu: bool = False  # computer-driven manager (draftbot/cpu.py decides)
 
     @property
     def empty_slots(self) -> int:
@@ -230,13 +231,29 @@ class Kick:
 
 
 @dataclass(frozen=True)
+class AddCpu:
+    """Commissioner adds computer opponents to the lobby (ids go negative)."""
+
+    user_id: int
+    count: int = 1
+
+
+@dataclass(frozen=True)
+class RemoveCpu:
+    """Commissioner removes a CPU manager from the lobby."""
+
+    user_id: int
+    cpu_id: int
+
+
+@dataclass(frozen=True)
 class Cancel:
     user_id: int
 
 
 Event = (
     Join | Leave | Start | Bid | TimerExpired | LotteryGuess | Pick | Swap
-    | Pause | Resume | Kick | Cancel
+    | Pause | Resume | Kick | AddCpu | RemoveCpu | Cancel
 )
 
 

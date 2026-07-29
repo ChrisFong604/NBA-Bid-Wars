@@ -343,17 +343,26 @@ function renderLobby(st) {
   $("lobby-cfg").textContent =
     `$${cfg.budget} budget · ${cfg.lot_seconds}s clock · ${eraLabel(cfg)}` +
     ` · sim: ${cfg.sim} · lineup ${cfg.lineup_seconds}s`;
+  const isCommish = st.you === st.commissioner;
   $("lobby-mgrs").replaceChildren(
     ...st.managers.map((m) => el(
       "li",
       { class: m.id === st.you ? "me" : "" },
-      `${m.name}${m.id === st.commissioner ? " 👑" : ""}` +
+      `${m.cpu ? "🤖 " : ""}${m.name}` +
+      `${m.id === st.commissioner ? " 👑" : ""}` +
       `${m.id === st.you ? " (you)" : ""}`,
+      m.cpu && isCommish
+        ? el("button", {
+            class: "ghost small-btn rm-cpu",
+            title: "Remove CPU",
+            onclick: () => send({ action: "remove_cpu", cpu_id: m.id }),
+          }, "✖")
+        : null,
     )),
   );
-  const isCommish = st.you === st.commissioner;
   $("btn-start").hidden = !isCommish;
   $("btn-start").disabled = st.managers.length < 2;
+  $("btn-addcpu").hidden = !isCommish;
   $("btn-lobby-cancel").hidden = !isCommish;
 }
 
@@ -377,8 +386,9 @@ function renderBoard(st) {
     { class: `mgr${m.id === st.you ? " me" : ""}` },
     el("div", { class: "mgr-head" },
       el("span", { class: "mgr-name" },
-        `${m.name}${m.id === st.commissioner ? " 👑" : ""}` +
-        `${m.autopilot ? " 🤖" : ""}`),
+        `${m.cpu ? "🤖 " : ""}${m.name}` +
+        `${m.id === st.commissioner ? " 👑" : ""}` +
+        `${m.autopilot ? " 💤" : ""}`),
       el("span", { class: "mgr-budget" }, `$${m.budget}`)),
     el("div", { class: "mgr-slots" }, m.spots.map((s) => el(
       "div", { class: "mgr-slot" },
@@ -671,8 +681,9 @@ function rosterCard(m, st) {
   return el("div", { class: `panel roster-card${m.id === st.you ? " me" : ""}` },
     el("div", { class: "mgr-head" },
       el("span", { class: "mgr-name" },
-        `${m.name}${m.id === st.commissioner ? " 👑" : ""}` +
-        `${m.autopilot ? " 🤖" : ""}`),
+        `${m.cpu ? "🤖 " : ""}${m.name}` +
+        `${m.id === st.commissioner ? " 👑" : ""}` +
+        `${m.autopilot ? " 💤" : ""}`),
       el("span", { class: "muted small" },
         `spent $${st.config.budget - m.budget}`)),
     el("div", { class: "mgr-slots" }, m.spots.map((s) => el(
@@ -785,6 +796,7 @@ function wireHome() {
         budget: Math.floor(Number($("c-budget").value)),
         clock: Math.floor(Number($("c-clock").value)),
         lineup: Math.floor(Number($("c-lineup").value)),
+        cpus: Math.floor(Number($("c-cpus").value)),
         era_from: Number($("c-era-from").value),
         era_to: Number($("c-era-to").value),
         sim: $("c-sim").value,
@@ -834,6 +846,8 @@ function wireGame() {
     send({ action: "guess", number, lot_seq: lot.seq });
   });
   $("btn-start").addEventListener("click", () => send({ action: "start" }));
+  $("btn-addcpu").addEventListener("click",
+    () => send({ action: "add_cpu", count: 1 }));
   $("btn-pause").addEventListener("click", () => send({ action: "pause" }));
   $("btn-resume").addEventListener("click", () => send({ action: "resume" }));
   $("btn-addtime").addEventListener("click",

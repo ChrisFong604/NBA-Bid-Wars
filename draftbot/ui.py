@@ -115,6 +115,17 @@ def short_name(full_name: str) -> str:
     return tokens[-1]
 
 
+def display(m: Manager) -> str:
+    """CPU managers have no Discord account — render their name plain."""
+    return f"🤖 {m.name}" if m.cpu else f"<@{m.user_id}>"
+
+
+def display_id(manager_id: int) -> str:
+    """Id-only render sites: CPU ids are negative and name deterministically
+    ("CPU 1" is -1), so no state lookup is needed."""
+    return f"🤖 CPU {-manager_id}" if manager_id < 0 else f"<@{manager_id}>"
+
+
 def rel(deadline: float) -> str:
     """Discord relative timestamp — the client ticks it, no edit spam."""
     return f"<t:{int(deadline)}:R>"
@@ -232,7 +243,7 @@ def lobby_embed(state: DraftState) -> discord.Embed:
         ),
     )
     managers = "\n".join(
-        f"{i}. <@{m.user_id}>" for i, m in enumerate(state.managers, 1)
+        f"{i}. {display(m)}" for i, m in enumerate(state.managers, 1)
     )
     embed.add_field(
         name=f"Managers ({len(state.managers)}/{cfg.max_managers})",
@@ -276,7 +287,7 @@ def lot_embed(
         status = f"Passes {rel(lot.deadline)} if nobody bids"
     else:
         embed.add_field(name="Current Bid", value=f"${lot.current_bid}")
-        embed.add_field(name="Leader", value=f"<@{lot.leader_id}>")
+        embed.add_field(name="Leader", value=display_id(lot.leader_id))
         status = f"Sells {rel(lot.deadline)}"
     if lot.lottery is not None:
         # Showdown status owns the card; the FINAL SECONDS warning edit is
@@ -293,7 +304,7 @@ def lot_embed(
 def sold_embed(player: Player, winner: Manager, price: int) -> discord.Embed:
     embed = discord.Embed(
         title=f"✅ SOLD ${price} — {player.name} ({player.pos})",
-        description=f"<@{winner.user_id}> lands **{player.name}**.",
+        description=f"{display(winner)} lands **{player.name}**.",
         color=GREEN,
     )
     embed.set_footer(
@@ -316,7 +327,7 @@ def force_embed(player: Player, target: Manager) -> discord.Embed:
             f"🔔 FORCE-ASSIGNED $1 — {player.name} ({player.pos}) "
             f"→ {target.name}"
         ),
-        description=f"Second pass with no bid — <@{target.user_id}> eats the $1.",
+        description=f"Second pass with no bid — {display(target)} eats the $1.",
         color=ORANGE,
     )
 
@@ -336,7 +347,7 @@ def cancelled_lot_embed(lot: Lot) -> discord.Embed:
 
 def showdown_open_text(lot: Lot) -> str:
     assert lot.lottery is not None
-    names = " and ".join(f"<@{p}>" for p in lot.lottery.participants)
+    names = " and ".join(display_id(p) for p in lot.lottery.participants)
     return (
         f"🎰 **ALL-IN SHOWDOWN** — {names} are all-in at "
         f"${lot.current_bid} on **{lot.player.name}**!"
@@ -364,7 +375,10 @@ def showdown_embed(lot: Lot) -> discord.Embed:
 
 
 def lottery_joined_text(manager_id: int) -> str:
-    return f"🎰 <@{manager_id}> shoves their stack in — they're in the showdown!"
+    return (
+        f"🎰 {display_id(manager_id)} shoves their stack in — "
+        "they're in the showdown!"
+    )
 
 
 def lottery_guessed_text(name: str) -> str:
@@ -381,7 +395,7 @@ def lottery_reveal_embed(
     lines = []
     for mid, guess in fx.guesses:
         manager = state.manager(mid)
-        name = manager.name if manager is not None else f"<@{mid}>"
+        name = manager.name if manager is not None else display_id(mid)
         line = f"{name} picked {guess} — off by {abs(guess - fx.mystery)}"
         if mid == fx.winner_id:
             line = f"🏆 **{line}**"
@@ -430,7 +444,10 @@ def pool_embeds(pool: tuple[Player, ...]) -> list[discord.Embed]:
 
 
 def pick_prompt(picker_id: int, deadline: float) -> str:
-    return f"<@{picker_id}> the floor is yours — /pick anyone, {rel(deadline)}"
+    return (
+        f"{display_id(picker_id)} the floor is yours — "
+        f"/pick anyone, {rel(deadline)}"
+    )
 
 
 def picked_embed(player: Player, picker: Manager) -> discord.Embed:
@@ -442,7 +459,7 @@ def picked_embed(player: Player, picker: Manager) -> discord.Embed:
 
 
 def autofill_embed(assignments: tuple[tuple[int, Player], ...]) -> discord.Embed:
-    lines = [f"<@{mid}> ← **{p.name}** ({p.pos})" for mid, p in assignments]
+    lines = [f"{display_id(mid)} ← **{p.name}** ({p.pos})" for mid, p in assignments]
     return discord.Embed(
         title="🎲 Auto-fill — empty slots filled from the pool, free",
         description="\n".join(lines) or "*nothing to fill*",
@@ -1134,6 +1151,8 @@ async def _render_complete(
     bot._cancel_timer(session)
     if session.board_task is not None:
         session.board_task.cancel()  # a debounced repost would land after this
+    if session.cpu_task is not None:
+        session.cpu_task.cancel()  # CPUs are done once the draft wraps
     bot._delete_snapshot(session.thread_id)
     # Unconditional final board — reposted fresh so it sits at the bottom.
     # (repost_board deliberately reads live session.state.)
@@ -1156,6 +1175,8 @@ async def _render_cancelled(
     bot._cancel_timer(session)
     if session.board_task is not None:
         session.board_task.cancel()
+    if session.cpu_task is not None:
+        session.cpu_task.cancel()
     if state.lot is not None:
         await edit_lot(session, cancelled_lot_embed(state.lot), clear=True)
     if session.lobby_message_id is not None:

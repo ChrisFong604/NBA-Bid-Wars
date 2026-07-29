@@ -50,6 +50,8 @@ def _manager(d: dict[str, Any]) -> Manager:
         spots=tuple(_spot(s) for s in d["spots"]),
         autopilot=d["autopilot"],
         last_action_lot=d["last_action_lot"],
+        # Pre-CPU snapshots omit the key -> human manager.
+        cpu=d.get("cpu", False),
     )
 
 

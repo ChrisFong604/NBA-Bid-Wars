@@ -146,6 +146,21 @@ prompt/results go out with the **final** lineups.
     have showdowns too; leaving mid-showdown doesn't withdraw the entry
     (same as a standing bid, #16).
 
+### Computer opponents
+20. **CPU managers are ordinary managers.** `/draft addcpu [count]`
+    (commissioner, lobby only) seats up to `max_managers` computer
+    opponents; `/draft removecpu` removes the newest. CPUs get negative
+    user ids (`CPU 1` = −1) and the `Manager.cpu` flag; every rule above
+    applies to them unchanged — bidding, soft close, all-in showdowns
+    (#19), going broke, free pick, force-assign, even AFK autopilot. The
+    brain is a pure module (`draftbot/cpu.py`): `decide(state, cpu_id,
+    now)` returns at most one event plus a poll delay, and the Discord bot
+    and the webapp each run a per-session driver task that feeds those
+    events through the same dispatch as human actions — the engine stays
+    the single authority, and a stale CPU decision is rejected like any
+    late click. A CPU counts toward the 2-manager minimum, so a solo 1v1
+    (one human, one CPU) works.
+
 ---
 
 ## 2. Discord UX

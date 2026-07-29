@@ -697,6 +697,125 @@ def test_three_manager_draft_with_broke_manager(client):
             assert "Run the full simulation now." in msg["share_prompt"]
 
 
+# ----------------------------------------------------------- cpu opponents
+
+
+def test_create_room_with_cpus(client):
+    resp = client.post("/api/rooms", json={"name": "Alice", "cpus": 2})
+    assert resp.status_code == 200
+    room = registry.get(resp.json()["room"])
+    assert len(room.state.managers) == 3
+    cpus = [m for m in room.state.managers if m.cpu]
+    assert [m.user_id for m in cpus] == [-1, -2]
+    assert all(m.budget == room.state.config.budget for m in cpus)
+
+    summary = client.get(f"/api/rooms/{room.code}")
+    assert summary.json()["managers"] == 3
+
+    for bad in (-1, 9, "two", True):
+        assert (
+            client.post("/api/rooms", json={"name": "A", "cpus": bad}).status_code
+            == 400
+        ), bad
+
+
+def test_add_and_remove_cpu_actions(client):
+    room, token_a, _ = registry.create_room(Config(), "Alice")
+    b = client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"}).json()
+    with client.websocket_connect(f"/ws/{room.code}?token={token_a}") as ws_a, \
+            client.websocket_connect(f"/ws/{room.code}?token={b['token']}") as ws_b:
+        ws_a.receive_json()
+        ws_b.receive_json()
+
+        ws_b.send_json({"action": "add_cpu"})  # not the commissioner
+        err = ws_b.receive_json()
+        assert err["type"] == "error"
+        assert err["message"] == "Only the commissioner can add CPUs."
+
+        ws_a.send_json({"action": "add_cpu"})
+        st = _recv_until(
+            ws_a,
+            lambda m: m.get("type") == "state"
+            and len(_state(m)["managers"]) == 3,
+        )
+        cpu_view = next(m for m in _state(st)["managers"] if m["cpu"])
+        assert cpu_view["id"] == -1
+        assert cpu_view["name"] == "CPU 1"
+        assert cpu_view["autopilot"] is False
+
+        ws_a.send_json({"action": "remove_cpu", "cpu_id": -1})
+        _recv_until(
+            ws_a,
+            lambda m: m.get("type") == "state"
+            and len(_state(m)["managers"]) == 2,
+        )
+        assert room.state.manager(-1) is None
+
+        ws_a.send_json({"action": "remove_cpu", "cpu_id": 2})  # Bob is human
+        err = ws_a.receive_json()
+        assert err["type"] == "error"
+        assert err["message"] == "That's not a CPU manager."
+
+
+def test_cpu_opponent_bids_and_draft_completes(client):
+    """One human + one CPU, end to end. The room is built directly through
+    the registry with a ~1.5s clock and a WIDE snipe window (the CPU brain
+    times its bid inside the window, so the window must dwarf the 0.5s
+    driver cadence). The commissioner adds the CPU over WS and starts; the
+    per-room driver polls draftbot.cpu.decide and feeds its Bid/Pick events
+    through normal dispatch. We poll WS frames (bounded by _recv_until's
+    frame cap; engine timers keep frames flowing regardless of the CPU)
+    until a state shows the CPU leading a lot or a sale lands on it. The
+    human never acts: the AFK sweep flips her to autopilot, the CPU
+    free-picks to a full roster, autofill covers hers, and the draft
+    completes with every roster full."""
+    cfg = Config(lot_seconds=1.5, snipe_window=1.2, snipe_extend=0.3,
+                 afk_lots=2, free_pick_seconds=10, lineup_seconds=0,
+                 sim="prompt")
+    room, token, _ = registry.create_room(cfg, "Alice")
+    seen: list[dict] = []
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as ws:
+        seen.append(ws.receive_json())
+        ws.send_json({"action": "add_cpu"})
+        st = _recv_until(
+            ws,
+            lambda m: m.get("type") == "state"
+            and len(_state(m)["managers"]) == 2,
+            seen,
+        )
+        cpu_mgr = next(m for m in _state(st)["managers"] if m["id"] != 1)
+        assert cpu_mgr["cpu"] is True and cpu_mgr["id"] == -1
+
+        ws.send_json({"action": "start"})
+        _recv_until(ws, lambda m: _is_phase(m, "auction"), seen)
+
+        def cpu_engaged(m):
+            if m.get("type") == "state":
+                if (_state(m).get("lot") or {}).get("leader") == -1:
+                    return True
+            return any(
+                f["kind"] == "sold" and f["manager"] == -1
+                for f in m.get("fx", [])
+            )
+
+        _recv_until(ws, cpu_engaged, seen)  # the CPU actually bid
+
+        _recv_until(ws, lambda m: _is_phase(m, "complete"), seen)
+        sim_msg = _recv_until(ws, lambda m: m.get("type") == "sim", seen)
+        assert sim_msg["mode"] == "prompt"
+
+    final = _state(_recv_last_state(seen))
+    assert all(s["player"] for m in final["managers"] for s in m["spots"])
+    # the CPU genuinely bought/picked (not just force-assign charity)
+    assert any(
+        e["manager"] == -1 and e["kind"] in ("sold", "pick")
+        for e in final["log"]
+    )
+    # cpu flag is public wire data; the hidden queue still never leaks
+    assert [m["cpu"] for m in final["managers"]] == [False, True]
+    assert '"queue"' not in json.dumps(seen)
+
+
 # -------------------------------------------------------------- /simulate
 
 

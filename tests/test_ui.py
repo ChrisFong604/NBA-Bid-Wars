@@ -6,18 +6,25 @@ import asyncio
 import os
 import subprocess
 import sys
+from dataclasses import replace
 
 import pytest
 
-from draftbot import ui
+from draftbot import cpu, engine, ui
 from draftbot.models import (
+    AddCpu,
+    Bid,
     Config,
     DraftState,
+    Join,
     Lot,
     Lottery,
+    LotteryGuess,
     LotteryRevealFx,
     Manager,
+    Pick,
     Player,
+    RemoveCpu,
     Spot,
 )
 
@@ -348,6 +355,122 @@ def test_prompt_messages_long_text_splits_on_line_boundaries():
     # Re-joining the fenced bodies rebuilds the text exactly — every split
     # landed on a line boundary and nothing was lost.
     assert "\n".join(bodies) == text
+
+
+# ------------------------------------------------------------- cpu managers
+
+
+def _empty_spots() -> tuple[Spot, ...]:
+    return tuple(Spot(slot=s) for s in ("PG", "SG", "SF", "PF", "C"))
+
+
+def _cpu_manager(n: int = 1, budget: int = 20) -> Manager:
+    return Manager(
+        user_id=-n, name=f"CPU {n}", budget=budget, spots=_empty_spots(), cpu=True
+    )
+
+
+def test_display_helpers():
+    assert ui.display(_cpu_manager(1)) == "🤖 CPU 1"
+    human = Manager(user_id=5, name="Chris", budget=20, spots=_empty_spots())
+    assert ui.display(human) == "<@5>"
+    assert ui.display_id(-2) == "🤖 CPU 2"
+    assert ui.display_id(7) == "<@7>"
+
+
+def test_addcpu_seats_cpu_managers_and_lobby_lists_them_plain():
+    state = DraftState(config=Config(), commissioner_id=1)
+    state, _ = engine.apply(state, Join(1, "Chris"))
+    state, _ = engine.apply(state, AddCpu(user_id=1, count=2))
+    cpus = [m for m in state.managers if m.cpu]
+    assert all(m.user_id < 0 for m in cpus) and len(cpus) == 2
+    assert all(m.budget == state.config.budget for m in cpus)
+    assert all(m.name == f"CPU {-m.user_id}" for m in cpus)
+    field = next(
+        f for f in ui.lobby_embed(state).fields if f.name.startswith("Managers")
+    )
+    assert "🤖 CPU 1" in field.value and "🤖 CPU 2" in field.value
+    assert "<@-" not in field.value
+    state, _ = engine.apply(state, RemoveCpu(user_id=1, cpu_id=-2))
+    assert [m.user_id for m in state.managers if m.cpu] == [-1]
+
+
+def test_cpu_never_rendered_as_negative_mention():
+    cpu_m = _cpu_manager(1)
+    state = DraftState(config=Config(), commissioner_id=1, managers=(cpu_m,))
+    cpu_lot = replace(SHOWDOWN_LOT, lottery=Lottery(participants=(-1, 3)))
+    surfaces = [
+        str(ui.board_embed(state).to_dict()),
+        str(ui.lobby_embed(state).to_dict()),
+        str(ui.sold_embed(JORDAN, cpu_m, 5).to_dict()),
+        str(ui.force_embed(JORDAN, cpu_m).to_dict()),
+        str(ui.autofill_embed(((-1, JORDAN),)).to_dict()),
+        ui.pick_prompt(-1, 1000.0),
+        ui.lottery_joined_text(-1),
+        ui.showdown_open_text(cpu_lot),
+    ]
+    for surface in surfaces:
+        assert "<@-" not in surface
+
+
+def test_lot_embed_leader_field_shows_cpu_plain():
+    lot = Lot(
+        seq=1, player=JORDAN, last_call=False,
+        current_bid=5, leader_id=-1, deadline=1_000.0,
+    )
+    embed = ui.lot_embed(lot, pool_left=10)
+    leader = next(f.value for f in embed.fields if f.name == "Leader")
+    assert leader == "🤖 CPU 1"
+
+
+def _cpu_auction_state(lot: Lot, cpu_m: Manager) -> DraftState:
+    return DraftState(
+        config=Config(), commissioner_id=1, phase="auction",
+        managers=(cpu_m,), lot=lot, lot_seq=lot.seq,
+    )
+
+
+def test_cpu_decide_opens_a_bid_near_the_deadline():
+    state = _cpu_auction_state(
+        Lot(seq=1, player=JORDAN, last_call=False, deadline=1_000.0),
+        _cpu_manager(1),
+    )
+    event, _ = cpu.decide(state, -1, now=999.5)
+    assert event == Bid(-1, 1, 999.5, amount=1)
+    # Far from the deadline the CPU waits instead of acting.
+    event2, delay2 = cpu.decide(state, -1, now=900.0)
+    assert event2 is None and delay2 > 0
+
+
+def test_cpu_decide_locks_a_showdown_guess():
+    lot = Lot(
+        seq=3, player=JORDAN, last_call=False, current_bid=5, leader_id=3,
+        deadline=1_000.0, lottery=Lottery(participants=(3, -1)),
+    )
+    state = _cpu_auction_state(lot, _cpu_manager(1, budget=5))
+    event, _ = cpu.decide(state, -1, now=990.0)
+    assert isinstance(event, LotteryGuess) and 1 <= event.guess <= 100
+    # Once a guess is locked, the CPU sits tight.
+    locked = replace(lot, lottery=Lottery(participants=(3, -1), guesses=((-1, 42),)))
+    event2, _ = cpu.decide(_cpu_auction_state(locked, _cpu_manager(1, budget=5)), -1, now=990.0)
+    assert event2 is None
+
+
+def test_cpu_decide_free_pick_takes_best_player():
+    scrub = Player(
+        id="scrub", name="Scrub", team="TST", pos="PG",
+        ppg=5.0, rpg=2.0, apg=1.0, stars=1,
+    )
+    state = DraftState(
+        config=Config(), commissioner_id=1, phase="free_pick",
+        managers=(_cpu_manager(1),), queue=(scrub, JORDAN),
+        pick_deadline=1_060.0,
+    )
+    event, _ = cpu.decide(state, -1, now=1_059.0)
+    assert isinstance(event, Pick) and event.player_id == "jordan"
+    # Right after the window opens, it thinks for a beat first.
+    event2, delay2 = cpu.decide(state, -1, now=1_000.5)
+    assert event2 is None and delay2 > 0
 
 
 def test_bot_module_imports_without_any_token():

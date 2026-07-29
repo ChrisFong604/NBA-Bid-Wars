@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from draftbot import dataset
 from draftbot.models import (
+    AddCpu,
     Bid,
     Cancel,
     Config,
@@ -26,6 +27,7 @@ from draftbot.models import (
     LotteryGuess,
     Pause,
     Pick,
+    RemoveCpu,
     Resume,
     Start,
     Swap,
@@ -93,6 +95,7 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
     budget = _int_option(body, "budget", 20, 1, 1000)
     clock = _int_option(body, "clock", 30, 15, 300)
     lineup = _int_option(body, "lineup", 60, 0, 300)
+    cpus = _int_option(body, "cpus", 0, 0, 8)
     era_from = _era_option(body, "era_from", 1960)
     era_to = _era_option(body, "era_to", 2020)
     if era_from > era_to:
@@ -112,6 +115,10 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
         sim=sim_mode,
     )
     room, token, user_id = registry.create_room(config, name)
+    if cpus:
+        # Pre-seed CPU opponents through the same dispatch path as the
+        # lobby button — the engine gates count/capacity, not the server.
+        await registry.dispatch(room, AddCpu(user_id=user_id, count=cpus))
     return {"room": room.code, "token": token, "user_id": user_id}
 
 
@@ -251,6 +258,16 @@ def _build_event(
         if isinstance(target, bool) or not isinstance(target, int):
             return None
         return Kick(user_id=actor, target_id=target, now=now)
+    if action == "add_cpu":  # engine gates commissioner/lobby/capacity
+        count = data.get("count", 1)
+        if isinstance(count, bool) or not isinstance(count, int):
+            return None
+        return AddCpu(user_id=actor, count=count)
+    if action == "remove_cpu":
+        cpu_id = data.get("cpu_id")
+        if isinstance(cpu_id, bool) or not isinstance(cpu_id, int):
+            return None
+        return RemoveCpu(user_id=actor, cpu_id=cpu_id)
     if action == "cancel":
         return Cancel(actor)
     if action == "leave":

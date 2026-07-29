@@ -21,9 +21,10 @@ from typing import Any
 import discord
 from discord import app_commands
 
-from . import dataset, engine, sim, store, ui
+from . import cpu, dataset, engine, sim, store, ui
 from .models import (
     SLOTS,
+    AddCpu,
     ArmTimerFx,
     AutoFilledFx,
     AutopilotFx,
@@ -50,6 +51,7 @@ from .models import (
     PausedFx,
     Pick,
     PickedFx,
+    RemoveCpu,
     Resume,
     ResumedFx,
     SoldFx,
@@ -116,6 +118,7 @@ class DraftSession:
     timer_task: asyncio.Task | None = None
     board_task: asyncio.Task | None = None
     sim_task: asyncio.Task | None = None
+    cpu_task: asyncio.Task | None = None
     lobby_message_id: int | None = None
     board_message_id: int | None = None
     lot_message_id: int | None = None
@@ -320,6 +323,34 @@ class DraftBot(discord.Client):
         if session.state.phase not in ("complete", "cancelled"):
             async with session.lock:
                 await self._save(session)  # board_message_id changed → refresh meta
+
+    # ---------------------------------------------------------- cpu driver
+
+    def _start_cpu_driver(self, session: DraftSession) -> None:
+        """One driver task per session with CPU managers (like the board
+        debounce). Started at /draft start and on recovery; the loop exits
+        when the live phases end, and complete/cancel renders cancel it."""
+        if not any(m.cpu for m in session.state.managers):
+            return
+        if session.cpu_task is not None and not session.cpu_task.done():
+            return
+        session.cpu_task = self._spawn(self._cpu_driver(session))
+
+    async def _cpu_driver(self, session: DraftSession) -> None:
+        while session.state.phase in ("auction", "free_pick"):
+            now = time.time()
+            delays: list[float] = []
+            for cpu_id in [
+                m.user_id for m in session.state.managers if m.cpu
+            ]:
+                # decide() is pure and runs OUTSIDE the lock on a state
+                # snapshot; the engine safely rejects any stale action.
+                event, delay = cpu.decide(session.state, cpu_id, now)
+                delays.append(delay)
+                if event is not None:
+                    effects = await self.apply_event(session, event)
+                    await self.render(session, effects)  # no interaction
+            await asyncio.sleep(max(0.5, min(delays, default=2.0)))
 
     # ------------------------------------------------------------ renderer
 
@@ -552,6 +583,10 @@ class DraftBot(discord.Client):
     async def _resume_session(self, session: DraftSession) -> None:
         state = session.state
         now = time.time()
+        if state.phase in ("auction", "free_pick"):
+            # Mirror the timer re-arm: snapshots with CPU managers restart
+            # the driver (even paused ones — decide() idles while paused).
+            self._start_cpu_driver(session)
         if state.phase == "complete":
             # The bot died between committing completion and announcing it.
             # Re-run the completion render: final rosters, sim, and the
@@ -767,6 +802,7 @@ def register_commands(bot: DraftBot) -> None:
         session.board_message_id = board.id
         async with session.lock:
             await bot._save(session)
+        bot._start_cpu_driver(session)
         await bot.render(session, effects)
 
     async def _pause_or_resume(
@@ -878,6 +914,57 @@ def register_commands(bot: DraftBot) -> None:
         await interaction.response.send_message(
             f"👢 {user.display_name} kicked{suffix}"
         )
+
+    @draft.command(
+        name="addcpu",
+        description="Add computer opponents to the lobby (commissioner)",
+    )
+    @app_commands.describe(count="How many CPU managers to add (default 1)")
+    async def draft_addcpu(
+        interaction: discord.Interaction,
+        count: app_commands.Range[int, 1, 8] = 1,
+    ) -> None:
+        if (session := await require_session(interaction)) is None:
+            return
+        effects = await bot.apply_event(
+            session, AddCpu(_admin_user_id(session, interaction), count)
+        )
+        await bot.render(session, effects, interaction)
+        if not interaction.response.is_done():
+            try:
+                plural = "s" if count != 1 else ""
+                await interaction.response.send_message(
+                    f"🤖 Added {count} CPU manager{plural} — they draft "
+                    "like anyone else."
+                )
+            except discord.HTTPException:
+                log.debug("final addcpu ack failed", exc_info=True)
+
+    @draft.command(
+        name="removecpu",
+        description="Remove the newest CPU manager (commissioner)",
+    )
+    async def draft_removecpu(interaction: discord.Interaction) -> None:
+        if (session := await require_session(interaction)) is None:
+            return
+        cpu_ids = [m.user_id for m in session.state.managers if m.cpu]
+        if not cpu_ids:
+            await _reply_ephemeral(
+                interaction, "There are no CPU managers to remove."
+            )
+            return
+        target = min(cpu_ids)  # highest-numbered CPU = most negative id
+        effects = await bot.apply_event(
+            session, RemoveCpu(_admin_user_id(session, interaction), target)
+        )
+        await bot.render(session, effects, interaction)
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.send_message(
+                    f"🤖 Removed CPU {-target}."
+                )
+            except discord.HTTPException:
+                log.debug("final removecpu ack failed", exc_info=True)
 
     @draft.command(name="cancel", description="Cancel the draft (commissioner)")
     async def draft_cancel(interaction: discord.Interaction) -> None:

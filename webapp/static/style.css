@@ -153,6 +153,7 @@ label > input, label > select { margin-top: 4px; }
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
+.mgr-list .rm-cpu { margin-left: 10px; min-height: 30px; min-width: 30px; }
 .mgr-list li.me { color: var(--accent); }
 
 /* ----------------------------------------------------------------- game */

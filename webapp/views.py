@@ -71,6 +71,7 @@ def _manager_view(m: Manager) -> dict[str, Any]:
         "name": m.name,
         "budget": m.budget,
         "autopilot": m.autopilot,
+        "cpu": m.cpu,
         "spots": [_spot_view(s) for s in m.spots],
     }
 
