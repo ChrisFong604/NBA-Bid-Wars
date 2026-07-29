@@ -4,8 +4,8 @@ DESIGN §4: the dataset is built offline and committed; there is no runtime
 API dependency. The pool spans every decade from the 1960s to the 2020s —
 each player appears once, anchored to the decade of their prime, with
 prime-years ``ppg/rpg/apg`` (the only stats recorded in every era). Star
-ratings are **editorial and era-relative**, stored in the JSON; they are
-validated here but never recomputed from stats.
+ratings are **generated and era-relative** (see ``scripts/build_dataset.py``),
+stored in the JSON; they are validated here but never recomputed from stats.
 """
 from __future__ import annotations
 

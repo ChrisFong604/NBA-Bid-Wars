@@ -14,31 +14,51 @@ def players() -> tuple[Player, ...]:
     return load_players()
 
 
-def test_loads_at_least_300_players(players: tuple[Player, ...]) -> None:
-    assert len(players) >= 300
+def test_loads_the_full_350_player_pool(players: tuple[Player, ...]) -> None:
+    assert len(players) == 350
 
 
-def test_every_decade_present_with_at_least_30_players(
+def test_every_decade_has_exactly_50_players(
     players: tuple[Player, ...],
 ) -> None:
     counts = Counter(p.decade for p in players)
     for decade in DECADES:
-        assert counts[decade] >= 30, f"{decade}s: only {counts[decade]} players"
+        assert counts[decade] == 50, f"{decade}s: {counts[decade]} players"
 
 
-def test_every_decade_has_at_least_6_per_position(
+def test_every_decade_has_at_least_10_per_position(
     players: tuple[Player, ...],
 ) -> None:
+    """5 stars + 5 quality role players per decade x position (1:1 rule)."""
     counts = Counter((p.decade, p.pos) for p in players)
     for decade in DECADES:
         for slot in SLOTS:
             n = counts[(decade, slot)]
-            assert n >= 6, f"{decade}s {slot}: only {n} players"
+            assert n >= 10, f"{decade}s {slot}: only {n} players"
+
+
+def test_single_decade_supports_a_ten_manager_draft(
+    players: tuple[Player, ...],
+) -> None:
+    """Era-sweep feasibility: any one-decade era range must field 10 managers
+    x 5 slots — 50 players with every position coverable 10 times."""
+    for decade in DECADES:
+        pool = filter_by_era(players, decade, decade)
+        assert len(pool) >= 50, f"{decade}s: only {len(pool)} players"
+        per_pos = Counter(p.pos for p in pool)
+        for slot in SLOTS:
+            assert per_pos[slot] >= 10, f"{decade}s {slot}: {per_pos[slot]} < 10"
 
 
 def test_ids_unique(players: tuple[Player, ...]) -> None:
     ids = [p.id for p in players]
     assert len(set(ids)) == len(ids)
+
+
+def test_ids_are_ascii_slugs(players: tuple[Player, ...]) -> None:
+    for p in players:
+        assert p.id.isascii(), f"{p.name}: non-ascii id {p.id!r}"
+        assert p.id == p.id.lower(), f"{p.name}: id not lowercase {p.id!r}"
 
 
 def test_names_unique(players: tuple[Player, ...]) -> None:
@@ -67,10 +87,13 @@ def test_stars_in_range(players: tuple[Player, ...]) -> None:
         assert 1 <= p.stars <= 5, f"{p.name}: stars {p.stars}"
 
 
-def test_every_decade_has_a_5_star(players: tuple[Player, ...]) -> None:
+def test_every_decade_has_the_full_star_pyramid(
+    players: tuple[Player, ...],
+) -> None:
+    """Era-relative stars: each decade carries every tier from 1 to 5."""
     for decade in DECADES:
-        five = [p for p in players if p.decade == decade and p.stars == 5]
-        assert five, f"{decade}s: no 5-star player"
+        tiers = {p.stars for p in players if p.decade == decade}
+        assert tiers == {1, 2, 3, 4, 5}, f"{decade}s: tiers {sorted(tiers)}"
 
 
 def test_every_decade_has_at_least_8_cheap_gambles(
@@ -86,7 +109,8 @@ def test_stats_within_sane_bounds(players: tuple[Player, ...]) -> None:
     for p in players:
         assert 0.0 <= p.ppg <= 45.0, f"{p.name}: ppg {p.ppg}"
         assert 0.0 <= p.rpg <= 26.0, f"{p.name}: rpg {p.rpg}"
-        assert 0.0 <= p.apg <= 14.0, f"{p.name}: apg {p.apg}"
+        # 14.5 admits John Stockton's real 3-year peak (14.1 apg, 1988–1991).
+        assert 0.0 <= p.apg <= 14.5, f"{p.name}: apg {p.apg}"
 
 
 # ------------------------------------------------------------ filter_by_era

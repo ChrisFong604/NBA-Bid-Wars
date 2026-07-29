@@ -168,15 +168,29 @@ wire protocol: `webapp/PROTOCOL.md`.
 
 ## Refreshing the dataset
 
-`draftbot/data/players.json` is a curated static file (~320 players spanning
-every decade from the 1960s to the 2020s) — there is no runtime API
-dependency, so draft night works offline. Each player appears once, anchored
-to the decade of their prime, with prime-years stats and a display range
-(e.g. Jordan → 1990s, `1989–1993`, CHI). Cards show only `ppg/rpg/apg`
-because those are the three stats recorded in every era since 1960 — steals,
-blocks, and efficiency metrics weren't tracked before the mid-1970s, so
-using them would misrepresent older players. Star ratings (1–5⭐) are
-era-relative: each player's prime is rated within their own era, so every
-decade carries the full spread from fringe pickup to inner-circle superstar.
-Edit or regenerate the file to taste; the loader validates positions and
+`draftbot/data/players.json` is a generated static file (350 players — 50
+per decade, 1960s through 2020s) — there is no runtime API dependency, so
+draft night works offline. It is built by `scripts/build_dataset.py`
+(stdlib-only, deterministic) from **"NBA Stats (1947-present)" by Sumitro
+Datta on Kaggle (CC0 public domain)**, fetched from its GitHub mirror and
+cached in `scripts/.cache/`:
+
+```bash
+uv run python scripts/build_dataset.py   # rewrites players.json + prints a report
+```
+
+Methodology: NBA-league seasons only (ABA/BAA excluded as pace/era
+outliers); each player's **prime** is the consecutive 3-season window
+maximizing `(pts + 0.7*trb + 0.9*ast) * min(g/65, 1)`, and the player
+appears once, anchored to the decade of that window's midpoint. Cards show
+only `ppg/rpg/apg` (games-weighted prime means) because those are the three
+stats recorded in every era since 1960 — steals, blocks, and efficiency
+metrics weren't tracked before the mid-1970s, so using them would
+misrepresent older players. Composition follows a **1:1 star/role rule**:
+per decade and position, the top 5 by caliber (prime value + a 5% boost per
+All-Star selection) plus the next 5 — the JJ Redick / Tyson Chandler tier —
+so every era offers both headliners and glue guys. Star ratings (1–5⭐) are
+era-relative: each decade's 50 are ranked by caliber and banded into the
+same pyramid (4×5⭐ … 10×1⭐), so every decade carries the full spread from
+fringe pickup to inner-circle superstar. The loader validates positions and
 duplicate ids (see `draftbot/dataset.py`).

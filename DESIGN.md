@@ -256,24 +256,32 @@ tests/
 
 ## 4. Player Dataset (cross-era, 1960s–2020s)
 
-- `draftbot/data/players.json` is a **curated static file spanning every
-  decade from the 1960s to the 2020s** (~320+ players). Each player appears
-  once, anchored to the **decade of their prime**, with **prime-years stats**
-  and a display range (e.g. Jordan → 1990s, `1989–1993`, CHI). No runtime API
+- `draftbot/data/players.json` is a **generated static file spanning every
+  decade from the 1960s to the 2020s** (350 players — 50 per decade, 10 per
+  position). Built deterministically by `scripts/build_dataset.py` from
+  Sumitro Datta's CC0 "NBA Stats (1947-present)" dataset (NBA seasons only;
+  ABA/BAA excluded). Each player appears once, anchored to the **decade of
+  their prime** — the best consecutive 3-season window by
+  `(pts + 0.7*trb + 0.9*ast) * min(g/65, 1)` — with **prime-years stats**
+  and a display range (e.g. Jordan → 1980s, `1986–1989`, CHI). Composition
+  is a 1:1 star/role split: per decade x position, the top 5 by caliber
+  plus the next 5 (the quality-role-player tier). No runtime API
   dependency; works offline on draft night.
 - **Era-safe stats only:** the card shows `ppg/rpg/apg` — the three stats
   recorded in every era since 1960. Steals, blocks, 3PT, and efficiency
   metrics are deliberately excluded because they weren't tracked before the
   mid-1970s; using them would misrepresent older players.
-- **Era-relative stars:** `stars` (1–5 ⭐) is an editorial rating of the
-  player's prime *within their own era* — a raw `ppg+rpg+apg` formula would
-  crown every pace-inflated 1960s stat line. 5★ = inner-circle superstar,
-  3★ = quality starter, 1★ = fringe/role player; every decade carries the full
-  spread so cheap gambles exist in every era.
+- **Era-relative stars:** `stars` (1–5 ⭐) rates the player's prime *within
+  their own era* — a cross-era `ppg+rpg+apg` formula would crown every
+  pace-inflated 1960s stat line. Each decade's 50 are ranked by caliber and
+  banded into the same pyramid (ranks 1–4 → 5★, 5–12 → 4★, 13–25 → 3★,
+  26–40 → 2★, 41–50 → 1★), so every decade carries the full spread and
+  cheap gambles exist in every era.
 - Positions use the modern PG/SG/SF/PF/C mapping by playstyle (Oscar
   Robertson → PG, Havlicek → SF).
-- Coverage: ≥ 30 players and ≥ 6 per position in every decade (deeper from the
-  1990s on). A narrow era range with a big lobby can be infeasible — the pool
+- Coverage: 50 players and 10 per position in every decade — a single-decade
+  era range supports a 10-manager lobby. A narrow era range with a big lobby
+  can still be infeasible — the pool
   builder errors loudly and the bot tells the host to widen the range or
   shrink the lobby. Names/teams/positions/stats are uncopyrightable facts.
 - Record shape: `{id, name, team, pos, ppg, rpg, apg, stars, decade, prime}`.
