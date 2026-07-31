@@ -32,8 +32,9 @@ an LLM ranking) and crowns a champion.
    block, and the remaining-pool count.
 
 ### The auction loop
-4. The next player is revealed as a card: name, team, position, last-season
-   `ppg/rpg/apg`, and a 1–5 ⭐ rating derived from those stats.
+4. The next player is revealed as a card: name, team, position, prime-years
+   `ppg/rpg/apg`, and their prime era. (Star ratings exist in the data for
+   pool tiers and pricing but are never shown — they'd bias bids and sims.)
 5. **Flat clock (default 30s):** each lot gets one countdown, armed at reveal —
    only a bid inside the final 10s extends it by 5s (anti-snipe soft close).
    Any eligible manager may open at any integer from $1
