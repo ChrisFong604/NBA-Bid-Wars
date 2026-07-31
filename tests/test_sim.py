@@ -362,6 +362,8 @@ def test_share_prompt_contains_teams_players_and_prime_framing():
         for player in team["players"]:
             assert player["name"] in prompt
     assert "AT THEIR PRIME" in prompt
+    # Star ratings are data-only — never leaked to a ranking LLM.
+    assert "star" not in prompt.lower()
 
 
 def test_share_prompt_instructions_and_ending():

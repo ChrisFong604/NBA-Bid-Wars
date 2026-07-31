@@ -63,7 +63,7 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
                  "cpu": false,
                  "spots": [{"slot": "PG", "player": {...} | null, "price": 3}]}],
   "lot": {"seq": 4, "player": {"name": "Michael Jordan", "pos": "SG",
-           "team": "CHI", "ppg": 31.5, "rpg": 6.3, "apg": 5.5, "stars": 5,
+           "team": "CHI", "ppg": 31.5, "rpg": 6.3, "apg": 5.5,
            "decade": 1990, "prime": "1989–1993"},
           "last_call": false, "current_bid": 5, "leader": 2,
           "deadline": 1769480000.0,

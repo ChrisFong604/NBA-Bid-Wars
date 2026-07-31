@@ -153,9 +153,8 @@ def test_lot_embed_flat_clock_no_hammer_wording():
 def test_lot_embed_description_has_prime_era_flavor_on_one_line():
     lot = Lot(seq=1, player=JORDAN, last_call=False, deadline=1_000.0)
     embed = ui.lot_embed(lot, pool_left=10)
-    assert embed.description == (
-        "CHI · prime 1989–1993 ('90s) · 31.5/6.3/5.5 · ⭐⭐⭐⭐⭐"
-    )
+    # No star rating anywhere on the card — data-only, it would bias bids.
+    assert embed.description == "CHI · prime 1989–1993 ('90s) · 31.5/6.3/5.5"
     assert "\n" not in embed.description
 
 
@@ -165,7 +164,7 @@ def test_stat_line_omits_era_chunk_for_pre_era_player():
         ppg=10.0, rpg=5.0, apg=2.0, stars=2,  # decade/prime defaults
     )
     lot = Lot(seq=1, player=old, last_call=False, deadline=1_000.0)
-    assert ui.lot_embed(lot, pool_left=3).description == "TST · 10/5/2 · ⭐⭐"
+    assert ui.lot_embed(lot, pool_left=3).description == "TST · 10/5/2"
 
 
 def test_pool_embeds_tag_each_player_with_decade():

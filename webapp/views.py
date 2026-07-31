@@ -51,7 +51,6 @@ def player_view(p: Player) -> dict[str, Any]:
         "ppg": p.ppg,
         "rpg": p.rpg,
         "apg": p.apg,
-        "stars": p.stars,
         "decade": p.decade,
         "prime": p.prime,
     }

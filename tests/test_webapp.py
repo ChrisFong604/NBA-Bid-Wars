@@ -195,6 +195,8 @@ def test_state_redaction_in_auction(client):
         st = _recv_until(ws, lambda m: _is_phase(m, "auction"))
         # Queue contents are unreachable; only the count is visible.
         assert '"queue"' not in json.dumps(st)
+        # Star ratings are data-only — never serialized to any client.
+        assert '"stars"' not in json.dumps(st)
         assert _state(st)["queue_count"] == 9  # 10-player pool, 1 on the block
         assert _state(st)["lot"]["player"]["name"]
         assert _state(st)["free_pick"] is None

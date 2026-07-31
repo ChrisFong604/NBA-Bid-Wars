@@ -93,10 +93,6 @@ function statLine(p) {
   return `${p.ppg} ppg · ${p.rpg} rpg · ${p.apg} apg`;
 }
 
-function stars(p) {
-  return "⭐".repeat(Math.max(0, p.stars));
-}
-
 function eraLabel(cfg) {
   return cfg.era_start === cfg.era_end
     ? `${cfg.era_start}s`
@@ -445,7 +441,6 @@ function renderLot(st) {
     el("h2", { class: "lot-name" }, p.name),
     el("div", { class: "lot-meta muted" }, meta.join(" · ")),
     el("div", { class: "lot-stats" }, statLine(p)),
-    el("div", { class: "lot-stars" }, stars(p)),
     el("div", { class: "lot-bid" },
       lot.current_bid > 0
         ? `💰 $${lot.current_bid} — ${mgrName(lot.leader)}` +
@@ -558,7 +553,6 @@ function freePickView(st) {
       el("div", { class: "pc-meta muted" },
         `${p.pos} · ${p.team} · ${p.decade}s`),
       el("div", { class: "pc-stats muted" }, statLine(p)),
-      el("div", { class: "pc-stars" }, stars(p)),
     ))));
 }
 

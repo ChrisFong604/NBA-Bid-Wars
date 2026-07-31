@@ -149,10 +149,11 @@ def decade_tag(decade: int) -> str:
 
 
 def _stat_line(p: Player) -> str:
-    """One-line lot flavor: CHI · prime 1989–1993 ('90s) · 31.5/6.3/5.5 · ⭐⭐⭐⭐⭐.
+    """One-line lot flavor: CHI · prime 1989–1993 ('90s) · 31.5/6.3/5.5.
+    Star ratings are data-only (never shown — they'd bias bids and sims).
     Pre-era snapshots may carry players with no prime — skip the era chunk."""
     era = f"prime {p.prime} ({decade_tag(p.decade)}) · " if p.prime else ""
-    return f"{p.team} · {era}{p.ppg:g}/{p.rpg:g}/{p.apg:g} · {'⭐' * p.stars}"
+    return f"{p.team} · {era}{p.ppg:g}/{p.rpg:g}/{p.apg:g}"
 
 
 def _roster_lines(m: Manager) -> str:
@@ -433,7 +434,7 @@ def board_embed(state: DraftState) -> discord.Embed:
 def pool_embeds(pool: tuple[Player, ...]) -> list[discord.Embed]:
     """The full remaining pool, chunked to stay inside embed limits."""
     lines = [
-        f"{'⭐' * p.stars} {p.pos} **{p.name}** — {p.team} · "
+        f"{p.pos} **{p.name}** — {p.team} · "
         f"{decade_tag(p.decade)} · {p.ppg:g}/{p.rpg:g}/{p.apg:g}"
         for p in pool
     ]
@@ -509,9 +510,8 @@ def complete_embed(state: DraftState) -> discord.Embed:
     embed = discord.Embed(title="🏁 Draft complete — final rosters", color=GOLD)
     for m in state.managers:
         spent = state.config.budget - m.budget
-        stars = sum(s.player.stars for s in m.spots if s.player is not None)
         embed.add_field(
-            name=f"{m.name} — spent ${spent} · {stars}⭐",
+            name=f"{m.name} — spent ${spent}",
             value=_roster_lines(m),
         )
     return embed

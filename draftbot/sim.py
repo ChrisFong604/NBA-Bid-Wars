@@ -159,11 +159,11 @@ def share_prompt(teams: list[TeamDict]) -> str:
         "\n"
         "Every player competes AT THEIR PRIME: primes face primes across\n"
         "eras — 1991 Jordan takes the floor against 2016 Curry. Each\n"
-        "player's stats are prime-years ppg/rpg/apg from their own era, plus\n"
-        "a 1-5 era-relative star rating. A player's natural position may\n"
-        "differ from the slot they occupy — out-of-position play is legal\n"
-        "and should flavor the games. When rosters mix eras, weigh the style\n"
-        "clashes — pace, spacing, hand-checking, three-point volume.\n"
+        "player's stats are prime-years ppg/rpg/apg from their own era. A\n"
+        "player's natural position may differ from the slot they occupy —\n"
+        "out-of-position play is legal and should flavor the games. When\n"
+        "rosters mix eras, weigh the style clashes — pace, spacing,\n"
+        "hand-checking, three-point volume.\n"
         "\n"
         f"TEAMS\n{rosters}\n"
         "\n"
@@ -211,12 +211,10 @@ def _team_names(teams: list[TeamDict]) -> frozenset[str]:
     return frozenset(names)
 
 
-def _total_stars(team: TeamDict) -> int:
-    return sum(p["stars"] for p in team["players"])
-
-
 def _roster_block(team: TeamDict) -> str:
-    lines = [f"Team {team['manager']} ({_total_stars(team)} total stars):"]
+    # Star ratings stay OUT of every LLM-facing text: they'd anchor the
+    # model's ranking on our editorial tiers instead of the stats.
+    lines = [f"Team {team['manager']}:"]
     for p in team["players"]:
         # Pre-era snapshots can carry players without a prime range.
         prime = p.get("prime") or "n/a"
@@ -224,8 +222,7 @@ def _roster_block(team: TeamDict) -> str:
         lines.append(
             f"  {p['slot']}: {p['name']} (natural {p['pos']}, "
             f"prime {prime} — {decade}s era, "
-            f"{p['ppg']:g} ppg / {p['rpg']:g} rpg / {p['apg']:g} apg, "
-            f"{p['stars']}/5 stars)"
+            f"{p['ppg']:g} ppg / {p['rpg']:g} rpg / {p['apg']:g} apg)"
         )
     return "\n".join(lines)
 
