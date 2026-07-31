@@ -337,7 +337,7 @@ class DraftBot(discord.Client):
         session.cpu_task = self._spawn(self._cpu_driver(session))
 
     async def _cpu_driver(self, session: DraftSession) -> None:
-        while session.state.phase in ("auction", "free_pick"):
+        while session.state.phase in ("auction", "free_pick", "lineup"):
             now = time.time()
             delays: list[float] = []
             for cpu_id in [
@@ -583,7 +583,7 @@ class DraftBot(discord.Client):
     async def _resume_session(self, session: DraftSession) -> None:
         state = session.state
         now = time.time()
-        if state.phase in ("auction", "free_pick"):
+        if state.phase in ("auction", "free_pick", "lineup"):
             # Mirror the timer re-arm: snapshots with CPU managers restart
             # the driver (even paused ones — decide() idles while paused).
             self._start_cpu_driver(session)

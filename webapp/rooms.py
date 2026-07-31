@@ -234,7 +234,7 @@ class RoomRegistry:
         cancelled on eviction."""
         if room.cpu_task is not None and not room.cpu_task.done():
             return
-        if room.state.phase not in ("auction", "free_pick"):
+        if room.state.phase not in ("auction", "free_pick", "lineup"):
             return
         if not any(m.cpu for m in room.state.managers):
             return
@@ -245,7 +245,7 @@ class RoomRegistry:
         snapshot) and submit its chosen events through the normal dispatch —
         the engine stays the single authority; stale decisions just bounce
         off its guards like any late human click."""
-        while room.state.phase in ("auction", "free_pick"):
+        while room.state.phase in ("auction", "free_pick", "lineup"):
             delays = [cpu.IDLE_DELAY]
             for m in room.state.managers:
                 if not m.cpu:

@@ -21,6 +21,7 @@ from .models import (
     Manager,
     Pick,
     Player,
+    Swap,
 )
 
 IDLE_DELAY = 3.0  # nothing to do — poll again soon (keeps showdown entry live)
@@ -45,7 +46,11 @@ def _decide(
     state: DraftState, cpu_id: int, now: float
 ) -> tuple[Event | None, float]:
     m = state.manager(cpu_id)
-    if m is None or not m.cpu or m.autopilot or m.full or state.paused:
+    if m is None or not m.cpu or m.autopilot or state.paused:
+        return None, IDLE_DELAY
+    if state.phase == "lineup":
+        return _lineup_move(state, m)
+    if m.full:
         return None, IDLE_DELAY
     if state.phase == "auction" and state.lot is not None:
         return _auction_move(state, m, now)
@@ -110,6 +115,29 @@ def _all_in_match(state: DraftState, m: Manager, limit: int) -> bool:
         return m.user_id not in lot.lottery.participants
     leader = state.manager(lot.leader_id) if lot.leader_id is not None else None
     return leader is not None and leader.budget == lot.current_bid
+
+
+def _lineup_move(state: DraftState, m: Manager) -> tuple[Event | None, float]:
+    """Arrange the roster: best players claim their natural slot; displaced
+    ones slide to the nearest open slot (a 4★ C behind a 5★ C plays PF, a
+    4★ PG behind a 5★ PG plays SG). One Swap per call; each swap parks at
+    least one player in their target slot, so it settles in <=4 swaps."""
+    slots = state.config.slots
+    idx = {s: i for i, s in enumerate(slots)}
+    players = sorted(
+        (s.player for s in m.spots if s.player is not None),
+        key=lambda p: (-p.stars, -(p.ppg + p.rpg + p.apg), p.id),
+    )
+    free = list(slots)
+    target: dict[str, str] = {}
+    for p in players:
+        best = min(free, key=lambda s: (abs(idx[s] - idx[p.pos]), idx[s]))
+        free.remove(best)
+        target[p.id] = best
+    for spot in m.spots:
+        if spot.player is not None and target[spot.player.id] != spot.slot:
+            return Swap(m.user_id, spot.slot, target[spot.player.id]), REACT_DELAY
+    return None, IDLE_DELAY
 
 
 def _free_pick_move(

@@ -26,6 +26,7 @@ from draftbot.models import (
     Player,
     RemoveCpu,
     Spot,
+    Swap,
 )
 
 # (class, sample constructor args) — every registered DynamicItem.
@@ -471,6 +472,60 @@ def test_cpu_decide_free_pick_takes_best_player():
     # Right after the window opens, it thinks for a beat first.
     event2, delay2 = cpu.decide(state, -1, now=1_000.5)
     assert event2 is None and delay2 > 0
+
+
+def _rated(pid: str, pos: str, stars: int) -> Player:
+    return Player(
+        id=pid, name=pid, team="TST", pos=pos,
+        ppg=20.0, rpg=5.0, apg=5.0, stars=stars,
+    )
+
+
+def _lineup_state(spots: tuple[Spot, ...]) -> DraftState:
+    m = Manager(user_id=-1, name="CPU 1", budget=0, spots=spots, cpu=True)
+    return DraftState(
+        config=Config(), commissioner_id=1, phase="lineup",
+        managers=(m,), lineup_deadline=1_060.0,
+    )
+
+
+def test_cpu_lineup_five_star_center_claims_center():
+    state = _lineup_state((
+        Spot("PG", _rated("pg", "PG", 3)),
+        Spot("SG", _rated("sg", "SG", 3)),
+        Spot("SF", _rated("sf", "SF", 3)),
+        Spot("PF", _rated("hakeem", "C", 5)),
+        Spot("C", _rated("chandler", "C", 4)),
+    ))
+    event, _ = cpu.decide(state, -1, now=1_000.0)
+    assert event == Swap(-1, "PF", "C")
+    state2, _ = engine.apply(state, event)
+    lineup = {s.slot: s.player.id for s in state2.manager(-1).spots}
+    assert lineup["C"] == "hakeem" and lineup["PF"] == "chandler"
+    # Arranged — the brain has nothing more to do.
+    event2, _ = cpu.decide(state2, -1, now=1_001.0)
+    assert event2 is None
+
+
+def test_cpu_lineup_converges_with_two_point_guards():
+    # 5★ PG takes PG; the 4★ PG is relegated to SG, bumping the 3★ SG
+    # into the open SF hole. Must settle (decide -> None) within 4 swaps.
+    state = _lineup_state((
+        Spot("PG", _rated("kidd", "PG", 4)),
+        Spot("SG", _rated("magic", "PG", 5)),
+        Spot("SF", _rated("sg", "SG", 3)),
+        Spot("PF", _rated("pf", "PF", 3)),
+        Spot("C", _rated("c", "C", 3)),
+    ))
+    for swaps in range(5):
+        event, _ = cpu.decide(state, -1, now=1_000.0 + swaps)
+        if event is None:
+            break
+        assert isinstance(event, Swap)
+        state, _ = engine.apply(state, event)
+    assert swaps <= 4
+    lineup = {s.slot: s.player.id for s in state.manager(-1).spots}
+    assert lineup["PG"] == "magic" and lineup["SG"] == "kidd"
 
 
 def test_bot_module_imports_without_any_token():
