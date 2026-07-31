@@ -1802,6 +1802,20 @@ function wireGame() {
   $("btn-copylink").addEventListener("click", (e) =>
     copyText(roomLink(S.session.room), e.currentTarget, "Link copied ✓"));
   $("btn-closed-home").addEventListener("click", exitToHome);
+  $("btn-done-home").addEventListener("click", exitToHome);
+  // Brand lockup = home. Mid-draft it's one click from abandoning the room,
+  // so seated managers get a confirm; the saved token still reclaims later.
+  const brandHome = () => {
+    const live = S.state != null && ACTIVE_PHASES.includes(S.state.phase) &&
+      me() != null;
+    if (live && !confirm(
+      "Head back home? The draft keeps going without you — reopen the room " +
+      "link to take back over."
+    )) return;
+    exitToHome();
+  };
+  $("brand-game").addEventListener("click", brandHome);
+  $("brand-lobby").addEventListener("click", brandHome);
 }
 
 // ------------------------------------------------------------------- boot

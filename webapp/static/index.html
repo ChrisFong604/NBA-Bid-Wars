@@ -187,7 +187,7 @@
 <main id="lobby" hidden>
   <div class="lobby-inner">
     <div class="lobby-header">
-      <div class="brand">
+      <div id="brand-lobby" class="brand clickable" title="Back to home">
         <div class="brand-mark">$</div>
         <span class="brand-name">NBA Bid War</span>
       </div>
@@ -239,7 +239,7 @@
 <!-- ============================================================ GAME -->
 <main id="game" hidden>
   <div id="topbar">
-    <div class="brand">
+    <div id="brand-game" class="brand clickable" title="Back to home">
       <div class="brand-mark">$</div>
       <span class="brand-name">NBA Bid War</span>
     </div>
@@ -408,6 +408,9 @@
           </div>
           <div id="final-boards"></div>
           <div id="sim-area"></div>
+          <button id="btn-done-home" class="ghost-btn done-home" type="button">
+            ← Back to home
+          </button>
         </div>
 
         <!-- Paused overlay -->
