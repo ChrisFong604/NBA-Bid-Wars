@@ -41,6 +41,8 @@ ROOM_CODE_LENGTH = 4
 ROOM_TTL_SECONDS = 3600.0
 # Phases where humans are mid-game — the sweep must never strand them.
 LIVE_PHASES = ("auction", "free_pick", "snake", "lineup")
+CHAT_HISTORY = 50  # ring buffer replayed to (re)connecting sockets
+CHAT_GAP_SECONDS = 1.0  # per-manager send rate limit
 
 
 class JoinError(Exception):
@@ -74,6 +76,9 @@ class Room:
     last_active: float = field(default_factory=time.time)
     # Per-room salt for blind-mode masked-card wire ids (views.blind_alias).
     blind_salt: str = field(default_factory=lambda: secrets.token_hex(8))
+    # Room chat: social, not game state — never touches the engine.
+    chat: list[dict[str, Any]] = field(default_factory=list)
+    chat_last: dict[int, float] = field(default_factory=dict)  # uid -> last ts
 
 
 class RoomRegistry:
@@ -303,6 +308,23 @@ class RoomRegistry:
                     "state": views.state_view(state, viewer_id, room.blind_salt),
                 },
             )
+
+    async def post_chat(self, room: Room, uid: int, text: str) -> str | None:
+        """Validate + broadcast one chat line; returns an error string or
+        None. Chat is room-level social data — the engine never sees it."""
+        m = room.state.manager(uid)
+        if m is None or m.cpu:
+            return "Join the room to talk trash."
+        now = time.time()
+        if now - room.chat_last.get(uid, 0.0) < CHAT_GAP_SECONDS:
+            return "Easy — one message a second."
+        room.chat_last[uid] = now
+        msg = {"from": uid, "name": m.name, "text": text, "at": now}
+        room.chat.append(msg)
+        del room.chat[:-CHAT_HISTORY]
+        room.last_active = now
+        await self._broadcast(room, {"type": "chat", **msg})
+        return None
 
     async def _send_effects(self, room: Room, effects: list[Effect]) -> None:
         mode = room.state.config.mode  # fixed at creation — safe post-commit

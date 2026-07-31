@@ -169,6 +169,13 @@ Server→client messages:
   followed by the normal `sold` fx in the same batch.
 - `{"type": "error", "message": "..."}` — private, only to the acting
   socket (ErrorFx equivalent).
+- `{"type": "chat", "from": 2, "name": "Bob", "text": "...", "at": epoch}`
+  — room chat, broadcast to every socket. Social data only: it never
+  touches the engine and carries the sender's display name so clients
+  don't depend on roster lookups.
+- `{"type": "chat_history", "messages": [<chat payloads>]}` — the last 50
+  chat lines, sent once right after the initial `state` on every
+  (re)connect.
 - `{"type": "sim", "mode": "prompt"|"stats"|"ai", ...}` — at completion:
   `prompt` carries the full `share_prompt` text (client shows a copy
   button); `stats`/`ai` carry `standings`/`champion`/`summary`.
@@ -190,6 +197,10 @@ Client→server messages (server maps to engine events verbatim):
 - `{"action": "leave"}` — in the lobby this removes the manager;
   mid-draft it flips the leaver's team to autopilot (engine rule, same as
   Discord's Leave).
+- `{"action": "chat", "text": "..."}` — seated managers only (tokenless
+  spectators and CPUs are rejected). Server-side: stripped, truncated to
+  280 chars, rate-limited to one message per second per manager; empty
+  text is silently ignored.
 
 Engine `Bid/Pick/...` events carry `now=time.time()` server-side. The
 commissioner-gate stays IN the engine: the server passes the caller's

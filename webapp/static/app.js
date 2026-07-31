@@ -58,6 +58,9 @@ const S = {
   create: { mode: "auction", depth: "legends", sim: "prompt" },
   errTimer: 0,
   pendingReclaimLine: false, // feed line deferred past the reconnect reseed
+  chat: [],         // room chat ring (server replays last 50 on connect)
+  chatUnread: 0,    // messages landed while the Feed tab was showing
+  chatOpen: false,  // which rail tab is active
 };
 
 const $ = (id) => document.getElementById(id);
@@ -352,7 +355,49 @@ function handleMessage(msg) {
   } else if (msg.type === "sim") {
     S.sim = msg;
     render();
+  } else if (msg.type === "chat") {
+    S.chat.push(msg);
+    if (S.chat.length > 50) S.chat.shift();
+    if (!S.chatOpen && msg.from !== S.state?.you) {
+      S.chatUnread += 1;
+    }
+    renderChat();
+  } else if (msg.type === "chat_history") {
+    S.chat = (msg.messages || []).slice(-50);
+    renderChat();
   }
+}
+
+// ---------------------------------------------------------------- chat
+
+function renderChat() {
+  const box = $("chat-msgs");
+  box.replaceChildren(...S.chat.map((m) =>
+    el("div", { class: "chat-row" },
+      el("span", {
+        class: "chat-dot",
+        style: `background:${tintFor(m.from)}`,
+      }),
+      el("div", { class: "chat-body" },
+        el("span", { class: "chat-name", style: `color:${tintFor(m.from)}` },
+          m.name),
+        el("span", { class: "chat-text" }, m.text)))));
+  box.scrollTop = box.scrollHeight; // newest pinned into view
+  const badge = $("chat-unread");
+  badge.hidden = S.chatUnread === 0;
+  badge.textContent = S.chatUnread > 9 ? "9+" : String(S.chatUnread);
+}
+
+function setChatTab(open) {
+  S.chatOpen = open;
+  if (open) S.chatUnread = 0;
+  $("tab-feed").classList.toggle("selected", !open);
+  $("tab-chat").classList.toggle("selected", open);
+  $("feed").hidden = open;
+  $("chat-panel").hidden = !open;
+  $("rail-live").textContent = open ? "managers only" : "live";
+  renderChat();
+  if (open) $("chat-input").focus();
 }
 
 function roomGone() {
@@ -391,7 +436,10 @@ function enterRoom(session) {
   S.slotSigs = {};
   S.pendingReclaimLine = false;
   S.backoffMs = RECONNECT_BASE_MS;
+  S.chat = [];
+  S.chatUnread = 0;
   $("feed").replaceChildren();
+  renderChat();
   if (hashCode() !== session.room) location.hash = session.room;
   connect();
 }
@@ -806,6 +854,12 @@ function renderTopbar(st) {
   pauseBtn.hidden = st.phase === "lineup";
   $("btn-addtime").hidden = !["auction", "snake", "free_pick"].includes(st.phase);
   $("spectate-chip").hidden = me() != null;
+
+  const seated = me() != null;
+  $("chat-input").disabled = !seated;
+  $("chat-send").disabled = !seated;
+  $("chat-input").placeholder = seated ? "Talk trash…" : "Join the room to chat";
+  renderMobileStrip(st);
 
   const my = me();
   $("reclaim-banner").hidden = !my || !my.autopilot || !active;
@@ -1489,9 +1543,58 @@ function setClockText(node, deadline) {
   return rem;
 }
 
+// The mobile strip condenses clock + bid + queue into one sticky line so
+// the big desktop panels can be hidden on phones (they ate half the screen).
+function activeDeadline(st) {
+  if (st.phase === "auction" && st.lot) return st.lot.deadline;
+  if (st.phase === "free_pick" && st.free_pick) return st.free_pick.deadline;
+  if (st.phase === "snake" && st.turn) return st.turn.deadline;
+  if (st.phase === "lineup" && st.lineup_deadline) return st.lineup_deadline;
+  return null;
+}
+
+function renderMobileStrip(st) {
+  let main = "", sub = "";
+  if (st.phase === "auction" && st.lot) {
+    if (st.lot.lottery) {
+      main = "🎰 Showdown";
+      sub = `$${st.lot.current_bid} locked`;
+    } else if (st.lot.current_bid > 0) {
+      main = `$${st.lot.current_bid}`;
+      sub = st.lot.leader === st.you ? "you lead 👑" : mgrName(st.lot.leader);
+    } else {
+      main = "No bids";
+      sub = "opens at $1";
+    }
+  } else if (st.phase === "free_pick" && st.free_pick) {
+    main = "Free picks";
+    sub = st.free_pick.picker === st.you ? "the pool is yours"
+      : mgrName(st.free_pick.picker);
+  } else if (st.phase === "snake" && st.turn) {
+    main = "🐍 On the clock";
+    sub = st.turn.manager === st.you ? "your pick" : mgrName(st.turn.manager);
+  } else if (st.phase === "lineup") {
+    main = "Set your lineup";
+    sub = "locks soon";
+  }
+  $("m-main").textContent = main;
+  $("m-sub").textContent = sub;
+  $("m-queue").textContent =
+    ["auction"].includes(st.phase) ? `${st.queue_count} left` : "";
+}
+
 function tick() {
   const st = S.state;
   if (!st || $("game").hidden) return;
+  const dl = activeDeadline(st);
+  if (dl != null) {
+    const rem = remaining(dl);
+    $("m-clock").textContent = fmtClock(rem);
+    $("m-strip").classList.toggle("urgent", rem < URGENT_SECONDS);
+  } else {
+    $("m-clock").textContent = "—";
+    $("m-strip").classList.remove("urgent");
+  }
   if (st.phase === "auction" && st.lot && !$("auction-view").hidden) {
     const total = Math.max(1, st.config.lot_seconds);
     const rem = remaining(st.lot.deadline);
@@ -1670,6 +1773,15 @@ function wireGame() {
   $("lobby-start").addEventListener("click", () => send({ action: "start" }));
   $("btn-addcpu").addEventListener("click",
     () => send({ action: "add_cpu", count: 1 }));
+  $("tab-feed").addEventListener("click", () => setChatTab(false));
+  $("tab-chat").addEventListener("click", () => setChatTab(true));
+  $("chat-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("chat-input").value.trim();
+    if (!text) return;
+    send({ action: "chat", text });
+    $("chat-input").value = "";
+  });
   $("btn-pause").addEventListener("click", () =>
     send({ action: S.state?.paused ? "resume" : "pause" }));
   $("btn-addtime").addEventListener("click",

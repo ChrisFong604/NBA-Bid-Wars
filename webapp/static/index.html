@@ -271,6 +271,15 @@
         <button id="btn-reclaim" type="button">Reclaim my team</button>
       </div>
 
+      <!-- Mobile-only compact status strip (CSS shows it under 800px) -->
+      <div id="m-strip">
+        <span id="m-clock">—</span>
+        <div class="m-mid">
+          <span id="m-main"></span>
+          <span id="m-sub"></span>
+        </div>
+        <span id="m-queue"></span>
+      </div>
       <div id="stage-scroll">
         <!-- Auction: lot + clock + current bid -->
         <div id="auction-view" hidden>
@@ -458,10 +467,23 @@
       </div>
       <div id="board"></div>
       <div class="rail-head feed-head">
-        <span class="rail-title">Feed</span>
-        <span class="rail-sub">live</span>
+        <div class="rail-tabs">
+          <button id="tab-feed" type="button" class="rail-tab selected">Feed</button>
+          <button id="tab-chat" type="button" class="rail-tab">Chat
+            <span id="chat-unread" hidden></span>
+          </button>
+        </div>
+        <span id="rail-live" class="rail-sub">live</span>
       </div>
       <div id="feed"></div>
+      <div id="chat-panel" hidden>
+        <div id="chat-msgs"></div>
+        <form id="chat-form">
+          <input id="chat-input" maxlength="280" autocomplete="off"
+                 placeholder="Talk trash…">
+          <button id="chat-send" type="submit">Send</button>
+        </form>
+      </div>
     </aside>
   </div>
 </main>

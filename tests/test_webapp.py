@@ -239,6 +239,51 @@ def test_state_messages_carry_server_now(client):
         assert msg["now"] == pytest.approx(time.time(), abs=5.0)
 
 
+def test_chat_roundtrip_gates_and_history(client, monkeypatch):
+    import webapp.rooms as rooms_module
+
+    monkeypatch.setattr(rooms_module, "CHAT_GAP_SECONDS", 0.0)
+    room, token, _ = registry.create_room(Config(), "Alice")
+    bob = client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"}).json()
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as alice_ws:
+        assert alice_ws.receive_json()["type"] == "state"
+        with client.websocket_connect(
+            f"/ws/{room.code}?token={bob['token']}"
+        ) as bob_ws:
+            assert bob_ws.receive_json()["type"] == "state"
+            alice_ws.send_json({"action": "chat", "text": "  your team stinks  "})
+            for ws in (alice_ws, bob_ws):  # broadcast to every socket
+                msg = _recv_until(ws, lambda m: m.get("type") == "chat")
+                assert (msg["from"], msg["name"]) == (1, "Alice")
+                assert msg["text"] == "your team stinks"  # stripped
+            # Oversize text is truncated server-side, never rejected.
+            alice_ws.send_json({"action": "chat", "text": "x" * 500})
+            msg = _recv_until(bob_ws, lambda m: m.get("type") == "chat")
+            assert len(msg["text"]) == 280
+            # Rate limit: restore the real gap and fire twice fast.
+            monkeypatch.setattr(rooms_module, "CHAT_GAP_SECONDS", 60.0)
+            alice_ws.send_json({"action": "chat", "text": "again"})
+            msg = _recv_until(alice_ws, lambda m: m.get("type") == "error")
+            assert msg["message"] == "Easy — one message a second."
+        # Reconnecting sockets get the ring buffer replayed.
+        with client.websocket_connect(
+            f"/ws/{room.code}?token={bob['token']}"
+        ) as back_ws:
+            assert back_ws.receive_json()["type"] == "state"
+            history = back_ws.receive_json()
+            assert history["type"] == "chat_history"
+            assert [m["text"] for m in history["messages"]] == [
+                "your team stinks", "x" * 280,
+            ]
+    # Tokenless spectators can read but never speak.
+    with client.websocket_connect(f"/ws/{room.code}") as spec_ws:
+        assert spec_ws.receive_json()["type"] == "state"
+        assert spec_ws.receive_json()["type"] == "chat_history"
+        spec_ws.send_json({"action": "chat", "text": "sneaky"})
+        msg = _recv_until(spec_ws, lambda m: m.get("type") == "error")
+        assert msg["message"] == "Join the room to talk trash."
+
+
 def test_ws_unknown_room(client):
     with client.websocket_connect("/ws/ZZZZ") as ws:
         msg = ws.receive_json()

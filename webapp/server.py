@@ -45,6 +45,7 @@ SIM_MODES = ("prompt", "off", "stats", "ai")
 POOL_DEPTHS = ("legends", "household", "deep")
 DRAFT_MODES = ("auction", "blind", "snake")
 MAX_NAME_LENGTH = 32
+CHAT_MAX_CHARS = 280
 
 
 # ------------------------------------------------------------- validation
@@ -328,6 +329,18 @@ async def _handle_action(
         if error is not None:
             await _ws_error(ws, error)
         return
+    if action == "chat":
+        if viewer_id is None:
+            await _ws_error(ws, "Join the room to talk trash.")
+            return
+        text = data.get("text")
+        text = text.strip()[:CHAT_MAX_CHARS] if isinstance(text, str) else ""
+        if not text:
+            return  # nothing to say
+        error = await registry.post_chat(room, viewer_id, text)
+        if error is not None:
+            await _ws_error(ws, error)
+        return
     event = _build_event(action, actor, now, data, room)
     if event is None:
         await _ws_error(ws, "Unknown or malformed action.")
@@ -356,6 +369,8 @@ async def ws_room(ws: WebSocket, code: str) -> None:
                 "state": views.state_view(room.state, viewer_id, room.blind_salt),
             }
         )
+        if room.chat:  # replay recent trash talk to (re)connecting sockets
+            await ws.send_json({"type": "chat_history", "messages": room.chat})
         while True:
             raw = await ws.receive_text()
             try:

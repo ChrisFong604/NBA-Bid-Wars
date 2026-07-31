@@ -893,6 +893,48 @@ input[type="range"] { flex: 1; min-width: 0; margin: 0; accent-color: var(--gold
 .slot-chip .pos { font: 700 8px/1 var(--font-mono); letter-spacing: .12em; color: rgba(245, 183, 60, .8); }
 .slot-chip .short { font: 600 9.5px/1.15 var(--font-ui); margin-top: 4px; min-height: 22px; overflow: hidden; }
 .slot-chip .price { font: 700 9px/1 var(--font-mono); color: rgba(243, 240, 234, .5); margin-top: 3px; }
+.rail-tabs { display: flex; gap: 6px; }
+.rail-tab {
+  background: transparent; border: 0; padding: 0 2px; cursor: pointer;
+  font: 400 15px/1 var(--font-display); letter-spacing: .12em;
+  text-transform: uppercase; color: rgba(243, 240, 234, .38);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.rail-tab.selected { color: var(--text); }
+#chat-unread {
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 100px;
+  background: var(--gold); color: var(--bg);
+  font: 700 9px/15px var(--font-mono); text-align: center;
+}
+#chat-panel { flex: 1 1 0; min-height: 110px; display: flex; flex-direction: column; }
+#chat-msgs { flex: 1 1 0; overflow: auto; padding: 0 12px 8px; min-height: 0; }
+.chat-row {
+  display: flex; gap: 8px; padding: 5px 4px; align-items: baseline;
+  border-bottom: 1px solid var(--border-faint);
+  animation: bwRise .22s ease-out both;
+}
+.chat-dot { flex: none; width: 8px; height: 8px; border-radius: 3px; align-self: center; }
+.chat-body { min-width: 0; }
+.chat-name { font: 600 11.5px/1.4 var(--font-ui); margin-right: 6px; }
+.chat-text { font: 400 12px/1.45 var(--font-ui); color: var(--text-70); overflow-wrap: anywhere; }
+#chat-form {
+  display: flex; gap: 6px; padding: 8px 12px 12px;
+  border-top: 1px solid var(--border-faint);
+}
+#chat-input {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 8px 10px; font: 400 12.5px/1.2 var(--font-ui);
+}
+#chat-input:focus { outline: none; border-color: rgba(245, 183, 60, .55); }
+#chat-input:disabled { opacity: .5; }
+#chat-send {
+  background: rgba(243, 240, 234, .06); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 8px 12px; font: 700 11px/1 var(--font-mono); cursor: pointer;
+}
+#chat-send:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+#chat-send:disabled { opacity: .5; cursor: not-allowed; }
 #feed { flex: 1 1 0; overflow: auto; padding: 0 12px 52px; min-height: 110px; }
 .feed-row {
   display: flex; gap: 9px; padding: 6px 4px;
@@ -941,19 +983,56 @@ input[type="range"] { flex: 1; min-width: 0; margin: 0; accent-color: var(--gold
 
 /* ------------------------------------------------- stacked layout < 800px */
 
+/* Mobile-only compact status strip: clock + bid + queue in one sticky line
+   (replaces the big clock ring / current-bid panels on phones). */
+#m-strip {
+  display: none; position: sticky; top: 0; z-index: 30;
+  align-items: center; gap: 12px; padding: 8px 14px;
+  background: var(--bg-elevated); border-bottom: 1px solid var(--border);
+}
+#m-strip.urgent { background: rgba(255, 77, 61, .12); border-bottom-color: rgba(255, 77, 61, .42); }
+#m-clock { flex: none; font: 700 20px/1 var(--font-mono); color: var(--gold); min-width: 58px; }
+#m-strip.urgent #m-clock { color: var(--urgent); }
+.m-mid { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; }
+#m-main { font: 400 17px/1 var(--font-display); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+#m-sub {
+  font: 400 11px/1 var(--font-ui); color: var(--text-60);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#m-queue { flex: none; font: 400 10px/1 var(--font-mono); color: rgba(243, 240, 234, .4); }
+
 @media (max-width: 800px) {
   .home-inner, .lobby-inner { padding-left: 18px; padding-right: 18px; }
   .home-facts { display: none; }
-  #game { height: auto; min-height: 100vh; overflow: visible; }
+
+  /* ONE page scroll: no nested scroll traps — board, feed, chat, and pool
+     all flow in the document; only the strip and bid bar stay pinned. */
+  #game { height: auto; min-height: 100vh; overflow: visible; padding-bottom: 108px; }
   #game-body { display: flex; flex-direction: column; }
-  #stage-col { min-height: 60vh; }
+  #stage-col { min-height: 0; }
   #stage-scroll { overflow: visible; padding: 14px; }
+  #board, #feed, #chat-msgs, .pool-scroll {
+    overflow: visible; max-height: none; flex: none; min-height: 0;
+  }
+  #feed { padding-bottom: 12px; }
+  #rail { border-left: 0; border-top: 1px solid var(--border); overflow: visible; }
+
   #topbar { flex-wrap: wrap; gap: 8px; }
   #gh-queue { display: none; }
+  #m-strip { display: flex; }
+
+  /* The stage sheds its bulky panels: strip carries clock + bid. */
   .lot-grid { grid-template-columns: 1fr; }
-  #bidbar { position: sticky; bottom: 0; z-index: 20; }
+  .lot-side { display: none; }
+  .ticket .portrait { display: none; }
+  .ticket .lot-name { font-size: clamp(26px, 9vw, 38px); }
+  .ticket-body { padding: 16px 14px; gap: 14px; }
+  .stat-well { min-width: 64px; padding: 8px; }
+  .stat-well .num { font-size: 20px; }
+
+  #bidbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; }
   #bid-active, #bid-blocked, #bid-exact { min-width: 0; flex-wrap: wrap; }
-  #rail { border-left: 0; border-top: 1px solid var(--border); }
-  #board, #feed { max-height: 40vh; }
+  #bank-amount { font-size: 28px; }
+
   #lu-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); width: 100%; }
 }
