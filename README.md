@@ -15,11 +15,12 @@ survives a mid-auction restart.
 **The rules in brief:** everyone starts with the same budget (default $20).
 Each revealed player stays on the block for one flat clock (default 30s) —
 a bid in the final 10 seconds adds 5 more (soft close — no last-second
-sniping); the high bid when it expires wins. If the leader is all-in and you
-hold exactly that amount, matching it triggers a 🎰 **all-in showdown**: each
-tied manager secretly picks a number 1–100 and the closest to the bot's
-mystery number buys the player (15s clock; a richer manager can still break
-it up by bidding higher). No bid means the
+sniping); the high bid when it expires wins. If your entire remaining budget
+exactly matches the current bid, bidding it triggers a 🎰 **all-in
+showdown**: you and the leader (plus any other exact-stack matchers) each
+secretly pick a number 1–100 and the closest to the bot's mystery number
+buys the player at the tied price (15s clock; anyone richer — the leader
+included — can still break it up by bidding higher). No bid means the
 player is recycled once — on their second appearance (🔔 LAST CALL) they sell
 or get force-assigned at $1. The pool is exactly five players per manager, so
 every player ends up on a roster — zero leftovers. The commissioner also

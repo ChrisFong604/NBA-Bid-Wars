@@ -58,12 +58,15 @@ def assert_invariants(state: DraftState) -> None:
         assert len(lottery.participants) >= 2, "showdown needs 2+ entrants"
         assert len(set(lottery.participants)) == len(lottery.participants)
         assert lottery.participants[0] == state.lot.leader_id
-        for uid in lottery.participants:  # every entrant is all-in at the tie
+        for uid in lottery.participants:
             m = state.manager(uid)
             assert m is not None
-            assert m.budget == state.lot.current_bid > 0, (
-                "showdown participant not all-in at the tied amount"
-            )
+            if uid == lottery.participants[0]:  # the dragged-in leader may
+                assert m.budget >= state.lot.current_bid > 0  # hold spare cash
+            else:  # every matcher is all-in at the tie
+                assert m.budget == state.lot.current_bid > 0, (
+                    "showdown matcher not all-in at the tied amount"
+                )
         guess_ids = [u for u, _ in lottery.guesses]
         assert len(set(guess_ids)) == len(guess_ids), "duplicate guess entry"
         assert set(guess_ids) <= set(lottery.participants), "outsider guess"
@@ -128,11 +131,11 @@ def play_draft(seed: int, n: int) -> bool:
                 step(Resume(1, now))
             if agent.random() < 0.1:  # stale-deadline fire, must be a no-op
                 step(TimerExpired("lot", state.lot.seq, state.lot.deadline - 5.0, now))
-            # All-in tie? Tied stacks sometimes pile into the showdown...
+            # All-in tie? Exact stacks sometimes pile into the showdown —
+            # the leader needn't be all-in (one-sided open, rule #19).
             lot = state.lot
             if lot.lottery is None and lot.leader_id is not None:
-                leader = state.manager(lot.leader_id)
-                if leader.budget == lot.current_bid and agent.random() < 0.6:
+                if agent.random() < 0.6:
                     for m in state.managers:
                         if m.budget == lot.current_bid and agent.random() < 0.8:
                             step(Bid(m.user_id, lot.seq, now, amount=lot.current_bid))

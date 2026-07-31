@@ -301,7 +301,8 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
         return _err(state, uid, "You're not drafting in this auction.")
     if m.full:
         return _err(state, uid, "Your roster is already full.")
-    if lot.leader_id == uid:
+    if lot.leader_id == uid and lot.lottery is None:
+        # During a showdown the leader MAY bid: raising cancels the lottery.
         return _err(state, uid, "You're already the high bidder.")
     if ev.amount is not None:
         effective = ev.amount
@@ -309,8 +310,9 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
         effective = lot.current_bid + (ev.increment or 0)
     # ALL-IN SHOWDOWN: a bid landing exactly on the live amount, from a
     # manager whose entire budget IS that amount, joins (or opens) a guess
-    # lottery instead of the usual "must beat" rejection — but opening
-    # requires the leader to be all-in too.
+    # lottery instead of the usual "must beat" rejection. The leader needn't
+    # be all-in themselves — they ride the showdown as a participant, or
+    # raise their own bid to cancel it.
     if lot.current_bid >= 1 and effective == m.budget == lot.current_bid:
         if lot.lottery is not None:
             if uid in lot.lottery.participants:
@@ -328,7 +330,7 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
             # Deadline UNCHANGED: joiners ride the running countdown.
             return state2, [LotteryJoinedFx(new_lot, uid)]
         leader = state.manager(lot.leader_id) if lot.leader_id is not None else None
-        if leader is not None and leader.budget == lot.current_bid:
+        if leader is not None:
             deadline = ev.now + state.config.lottery_seconds
             new_lot = replace(
                 lot,
@@ -342,7 +344,7 @@ def _bid(state: DraftState, ev: Bid) -> Transition:
                 LotteryOpenedFx(new_lot),
                 ArmTimerFx("lot", lot.seq, deadline),
             ]
-        # Leader still holds spare budget — fall through to normal rejection.
+        # No leader (current_bid >= 1 makes this unreachable) — fall through.
     if effective < 1 or effective <= lot.current_bid:
         return _err(state, uid, f"Bid must beat the current ${lot.current_bid}.")
     if effective > m.budget:

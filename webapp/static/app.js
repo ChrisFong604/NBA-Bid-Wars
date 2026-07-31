@@ -462,18 +462,27 @@ function updateBidBar(st) {
   const inShowdown =
     lot.lottery != null && me != null && lot.lottery.participants.includes(me.id);
   // Cosmetic only — the engine re-validates every bid. Richer managers keep
-  // live bid controls during a showdown (outbidding cancels it).
+  // live bid controls during a showdown (outbidding cancels it) — including
+  // the dragged-in leader, whose raise is what kills their own lottery.
   const blocked = (need) =>
-    me == null || leading || full || me.budget < lot.current_bid + need;
+    me == null || full || (leading && lot.lottery == null) ||
+    me.budget < lot.current_bid + need;
+  // An exact-stack tie is a legal Custom bid: it opens or joins the showdown.
+  const allInTie =
+    me != null && !full && !leading && !inShowdown &&
+    lot.current_bid >= 1 && me.budget === lot.current_bid;
   for (const btn of document.querySelectorAll(".bid-quick")) {
     btn.disabled = blocked(Number(btn.dataset.inc));
   }
-  $("bid-amount").disabled = blocked(1);
-  $("bid-custom").disabled = blocked(1);
+  $("bid-amount").disabled = blocked(1) && !allInTie;
+  $("bid-custom").disabled = blocked(1) && !allInTie;
   $("bid-note").textContent =
     me == null ? "Spectating"
       : full ? "Roster full"
+      : inShowdown && leading && me.budget > lot.current_bid
+        ? "🎰 Lock in a number — or raise your bid to call the showdown off"
       : inShowdown ? "🎰 You're in the showdown — lock in your number!"
+      : allInTie ? `🎰 Match with your last $${me.budget} to force a showdown!`
       : leading ? "You lead 👑"
       : me.budget <= lot.current_bid ? `Priced out — $${me.budget} left`
       : `$${me.budget} left`;

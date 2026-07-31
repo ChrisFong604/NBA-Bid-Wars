@@ -234,7 +234,7 @@ def test_lot_embed_showdown_beats_final_seconds_styling():
 
 def test_showdown_open_text_names_stakes_and_player():
     assert ui.showdown_open_text(SHOWDOWN_LOT) == (
-        "🎰 **ALL-IN SHOWDOWN** — <@2> and <@3> are all-in at $5 "
+        "🎰 **ALL-IN SHOWDOWN** — <@2> and <@3> face off at $5 "
         "on **Michael Jordan**!"
     )
 
@@ -472,6 +472,26 @@ def test_cpu_decide_free_pick_takes_best_player():
     # Right after the window opens, it thinks for a beat first.
     event2, delay2 = cpu.decide(state, -1, now=1_000.5)
     assert event2 is None and delay2 > 0
+
+
+def test_cpu_decide_joins_live_showdown_when_all_in_matches():
+    # Outsider CPU whose exact stack ties the live amount piles into a
+    # running lottery instead of sitting it out (one-sided open, rule #19).
+    filled = tuple(
+        Spot(slot, _rated(f"f{slot}", slot, 2))
+        for slot in ("PG", "SG", "SF", "PF")
+    ) + (Spot("C"),)
+    m = Manager(user_id=-1, name="CPU 1", budget=5, spots=filled, cpu=True)
+    lot = Lot(
+        seq=3, player=JORDAN, last_call=False, current_bid=5, leader_id=3,
+        deadline=1_000.0, lottery=Lottery(participants=(3, 4)),
+    )
+    state = DraftState(
+        config=Config(), commissioner_id=1, phase="auction",
+        managers=(m,), lot=lot, lot_seq=3,
+    )
+    event, _ = cpu.decide(state, -1, now=990.0)
+    assert event == Bid(-1, 3, 990.0, amount=5)
 
 
 def _rated(pid: str, pos: str, stars: int) -> Player:

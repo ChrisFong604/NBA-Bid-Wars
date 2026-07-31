@@ -355,7 +355,7 @@ def showdown_open_text(lot: Lot) -> str:
     assert lot.lottery is not None
     names = " and ".join(display_id(p) for p in lot.lottery.participants)
     return (
-        f"🎰 **ALL-IN SHOWDOWN** — {names} are all-in at "
+        f"🎰 **ALL-IN SHOWDOWN** — {names} face off at "
         f"${lot.current_bid} on **{lot.player.name}**!"
     )
 
@@ -366,7 +366,7 @@ def showdown_embed(lot: Lot) -> discord.Embed:
     return discord.Embed(
         title="🎰 All-in showdown — closest number wins",
         description=(
-            "Every stack is on the table, so luck breaks the tie. Tap "
+            "Luck, not speed, breaks an all-in tie. Tap "
             "**🎲 Pick my number** and choose a number from **1 to 100** — "
             "resubmitting overwrites, and picks stay secret until the "
             "reveal. When the clock hits zero I draw a mystery number and "

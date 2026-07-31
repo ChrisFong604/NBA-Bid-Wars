@@ -129,14 +129,16 @@ prompt/results go out with the **final** lineups.
     the creator; `Manage Server` permission is the fallback.
 
 ### The all-in showdown
-19. **Tied all-in stacks break on luck, not speed.** Without this rule, when
-    managers are tied at the same remaining budget the first to bid their
-    whole stack wins unchallengeably (#8 requires strictly greater). So: when
-    the leader's bid equals their **entire** remaining budget and another
-    manager whose budget is **exactly** that amount bids it (a quick-button
-    increment landing on it, or a Custom bid equal to it), the lot flips into
-    a **🎰 showdown** instead of a rejection — a 15s countdown
-    (`Config.lottery_seconds`) replaces the lot clock, and any further tied
+19. **An all-in tie breaks on luck, not speed.** Without this rule, a
+    manager whose whole stack equals the live bid can never contest it (#8
+    requires strictly greater). So: when a manager whose budget is
+    **exactly** the current bid bids it (a quick-button increment landing on
+    it, or a Custom bid equal to it), the lot flips into a **🎰 showdown**
+    instead of a rejection — only the MATCHER must be all-in; the leader is
+    dragged in as a participant whatever their budget, and can either ride
+    the lottery or raise their own bid to cancel it (the one case a leader
+    may bid, #8's self-raise rejection notwithstanding). A 15s countdown
+    (`Config.lottery_seconds`) replaces the lot clock, and any further
     all-in manager who bids the amount joins while it runs (deadline
     unchanged). Participants each pick a secret number 1–100 via **🎲 Pick my
     number** (resubmission overwrites; a missing pick is rolled randomly —

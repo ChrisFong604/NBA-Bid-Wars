@@ -322,12 +322,50 @@ def test_all_in_tie_opens_showdown():
     assert state3.lot.lottery == Lottery(participants=(1, 3))
 
 
-def test_match_rejected_when_leader_not_all_in():
-    # Leader bid $5 but holds $8 — a matching $5 is an ordinary rejection.
+def test_all_in_match_opens_showdown_even_when_leader_richer():
+    # Leader bid $5 out of $8; manager 2's entire $5 lands on the tie. One
+    # all-in side is enough — the rich leader is dragged in as a participant.
     state = showdown_state(budgets=(8, 5, 5, 9))
     state2, fx = engine.apply(state, Bid(2, 1, 1001.0, amount=5))
-    assert state2 is state
-    assert fx == [ErrorFx(2, "Bid must beat the current $5.")]
+    assert state2.lot.lottery == Lottery(participants=(1, 2))
+    assert fx_of(fx, LotteryOpenedFx)
+    # A tie from a manager with money to spare is still an ordinary rejection.
+    state3, fx3 = engine.apply(state, Bid(4, 1, 1001.0, amount=5))
+    assert state3 is state
+    assert fx3 == [ErrorFx(4, "Bid must beat the current $5.")]
+
+
+def test_rich_leader_can_raise_to_cancel_own_showdown():
+    state = showdown_state(
+        Lottery(participants=(1, 2), guesses=((2, 42),)), budgets=(8, 5, 5, 9)
+    )
+    state2, fx = engine.apply(state, Bid(1, 1, 1001.0, amount=6))
+    lot = state2.lot
+    assert lot.lottery is None
+    assert lot.current_bid == 6 and lot.leader_id == 1
+    assert fx_of(fx, LotteryCancelledFx)[0].manager_id == 1
+    # Without a live showdown, the leader raising themselves stays rejected.
+    plain = showdown_state(budgets=(8, 5, 5, 9))
+    state3, fx3 = engine.apply(plain, Bid(1, 1, 1001.0, amount=6))
+    assert state3 is plain
+    assert fx3 == [ErrorFx(1, "You're already the high bidder.")]
+
+
+def test_rich_leader_winning_showdown_pays_only_the_tied_amount():
+    state = showdown_state(
+        Lottery(participants=(1, 2), guesses=((1, 10), (2, 90))),
+        budgets=(8, 5, 5, 9),
+    )
+    player = state.lot.player
+    rng = random.Random(21)
+    mystery = random.Random(21).randint(1, 100)
+    winner_id = 1 if abs(10 - mystery) <= abs(90 - mystery) else 2
+    state2, fx = engine.apply(state, TimerExpired("lot", 1, 1030.0, 1030.0), rng)
+    assert fx_of(fx, SoldFx)[0] == SoldFx(player, winner_id, 5)
+    if winner_id == 1:  # charged the tied $5, NOT their whole $8 stack
+        assert state2.manager(1).budget == 3
+    else:
+        assert state2.manager(1).budget == 8 and state2.manager(2).budget == 0
 
 
 def test_showdown_opens_on_last_call_lot():
@@ -344,12 +382,12 @@ def test_third_joiner_keeps_deadline():
     assert lot.lottery.participants == (1, 2, 3)
     assert lot.deadline == 1030.0  # deadline UNCHANGED, no re-arm
     assert fx == [LotteryJoinedFx(lot, 3)]
-    # A participant can't join twice; the leader bounces as high bidder.
+    # A participant can't join twice — including the leader (participants[0]).
     state3, fx3 = engine.apply(state2, Bid(2, 1, 1006.0, amount=5))
     assert state3 is state2
     assert fx3 == [ErrorFx(2, "You're already in the showdown.")]
     _, fx4 = engine.apply(state2, Bid(1, 1, 1006.0, amount=5))
-    assert fx4 == [ErrorFx(1, "You're already the high bidder.")]
+    assert fx4 == [ErrorFx(1, "You're already in the showdown.")]
 
 
 def test_autopilot_manager_cannot_join_showdown():

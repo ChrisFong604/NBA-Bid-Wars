@@ -77,13 +77,16 @@ def _auction_move(
     rng = random.Random(m.user_id * 1_000_003 + lot.seq)
     if lot.lottery is not None:
         # Showdown participant with no locked number yet -> pick one.
-        if m.user_id in lot.lottery.participants and all(
-            uid != m.user_id for uid, _ in lot.lottery.guesses
-        ):
-            return (
-                LotteryGuess(m.user_id, lot.seq, rng.randint(1, 100), now),
-                REACT_DELAY,
-            )
+        if m.user_id in lot.lottery.participants:
+            if all(uid != m.user_id for uid, _ in lot.lottery.guesses):
+                return (
+                    LotteryGuess(m.user_id, lot.seq, rng.randint(1, 100), now),
+                    REACT_DELAY,
+                )
+            return None, IDLE_DELAY
+        # Outsider whose exact stack ties a player worth it -> pile in.
+        if _all_in_match(state, m, _limit(m, lot.player)):
+            return Bid(m.user_id, lot.seq, now, amount=m.budget), REACT_DELAY
         return None, IDLE_DELAY
     if lot.leader_id == m.user_id:
         return None, IDLE_DELAY
@@ -113,8 +116,7 @@ def _all_in_match(state: DraftState, m: Manager, limit: int) -> bool:
         return False
     if lot.lottery is not None:
         return m.user_id not in lot.lottery.participants
-    leader = state.manager(lot.leader_id) if lot.leader_id is not None else None
-    return leader is not None and leader.budget == lot.current_bid
+    return lot.leader_id is not None
 
 
 def _lineup_move(state: DraftState, m: Manager) -> tuple[Event | None, float]:
