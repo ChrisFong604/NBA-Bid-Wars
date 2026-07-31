@@ -104,9 +104,21 @@ def test_create_room_validation(client):
         {"name": "A", "era_to": 2025},
         {"name": "A", "era_from": 2020, "era_to": 1960},  # backwards
         {"name": "A", "sim": "vibes"},
+        {"name": "A", "pool_depth": "shallow"},
     ]
     for body in bad_bodies:
         assert client.post("/api/rooms", json=body).status_code == 400, body
+
+
+def test_create_room_pool_depth_roundtrips_into_config(client):
+    resp = client.post("/api/rooms", json={"name": "Alice", "pool_depth": "legends"})
+    assert resp.status_code == 200
+    room = registry.get(resp.json()["room"])
+    assert room.state.config.pool_depth == "legends"
+    assert views.state_view(room.state, None)["config"]["pool_depth"] == "legends"
+    # omitted -> the "deep" default (current behavior unchanged)
+    resp = client.post("/api/rooms", json={"name": "Bob"})
+    assert registry.get(resp.json()["room"]).state.config.pool_depth == "deep"
 
 
 def test_join_and_full_lobby(client):

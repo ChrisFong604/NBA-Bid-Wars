@@ -687,11 +687,17 @@ def register_commands(bot: DraftBot) -> None:
         lineup="Seconds to arrange lineups after the last roster fills — 0 skips it (default 60)",
         era_from="Earliest era in the player pool (default 1960s)",
         era_to="Latest era in the player pool (default 2020s)",
+        pool="How deep the pool goes: legends ~20/era, household ~35/era, deep ~50/era (default deep)",
         sim="Post-draft tournament sim mode (default: prompt for your own LLM)",
     )
     @app_commands.choices(
         era_from=era_choices,
         era_to=era_choices,
+        pool=[
+            app_commands.Choice(name="Legends only", value="legends"),
+            app_commands.Choice(name="Household names", value="household"),
+            app_commands.Choice(name="Deep (stars + role players)", value="deep"),
+        ],
         sim=[
             app_commands.Choice(name="Prompt for your own LLM", value="prompt"),
             app_commands.Choice(name="Off", value="off"),
@@ -706,6 +712,7 @@ def register_commands(bot: DraftBot) -> None:
         lineup: app_commands.Range[int, 0, 300] = 60,
         era_from: int = 1960,
         era_to: int = 2020,
+        pool: str = "deep",
         sim: str = "prompt",  # shadows the sim module only inside this closure
     ) -> None:
         channel = interaction.channel
@@ -741,6 +748,7 @@ def register_commands(bot: DraftBot) -> None:
             lineup_seconds=lineup,
             era_start=era_from,
             era_end=era_to,
+            pool_depth=pool,
             sim=sim,
         )
         state = DraftState(config=config, commissioner_id=interaction.user.id)
@@ -778,6 +786,7 @@ def register_commands(bot: DraftBot) -> None:
         players = dataset.filter_by_era(
             players, config.era_start, config.era_end
         )
+        players = dataset.filter_by_depth(players, config.pool_depth)
         try:
             effects = await bot.apply_event(
                 session,
@@ -789,7 +798,8 @@ def register_commands(bot: DraftBot) -> None:
                 interaction,
                 f"Can't build a pool from the **{eras}** eras for "
                 f"**{len(session.state.managers)}** managers ({exc}). "
-                "Widen the era range or shrink the lobby.",
+                "Widen the era range, deepen the player pool, or shrink "
+                "the lobby.",
             )
             return
         if any(isinstance(fx, ErrorFx) for fx in effects):

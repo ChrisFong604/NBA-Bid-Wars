@@ -342,7 +342,7 @@ function renderLobby(st) {
   const cfg = st.config;
   $("lobby-cfg").textContent =
     `$${cfg.budget} budget · ${cfg.lot_seconds}s clock · ${eraLabel(cfg)}` +
-    ` · sim: ${cfg.sim} · lineup ${cfg.lineup_seconds}s`;
+    ` · pool: ${cfg.pool_depth} · sim: ${cfg.sim} · lineup ${cfg.lineup_seconds}s`;
   const isCommish = st.you === st.commissioner;
   $("lobby-mgrs").replaceChildren(
     ...st.managers.map((m) => el(
@@ -799,6 +799,7 @@ function wireHome() {
         cpus: Math.floor(Number($("c-cpus").value)),
         era_from: Number($("c-era-from").value),
         era_to: Number($("c-era-to").value),
+        pool_depth: $("c-pool").value,
         sim: $("c-sim").value,
       });
       startSession(res, name);

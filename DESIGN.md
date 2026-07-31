@@ -19,6 +19,9 @@ an LLM ranking) and crowns a champion.
    anywhere from the 1960s through the 2020s (e.g. 2000s–2020s, or
    1960s–1990s). Default is all eras. Each player belongs to the decade of
    their prime; only players whose prime falls inside the range enter the pool.
+   A **pool depth** picks how deep the pool goes: `legends` (caliber rank ≤ 4,
+   ~20 per era), `household` (rank ≤ 7, ~35), or `deep` (everyone, ~50 —
+   the default).
 2. Managers join via a Join button in the lobby message. 2–10 managers. Once the
    draft starts, **no one can join**.
 3. On `/draft start` the bot builds the pool: **exactly 5N players** —
@@ -295,11 +298,18 @@ tests/
 - Positions use the modern PG/SG/SF/PF/C mapping by playstyle (Oscar
   Robertson → PG, Havlicek → SF).
 - Coverage: 50 players and 10 per position in every decade — a single-decade
-  era range supports a 10-manager lobby. A narrow era range with a big lobby
+  era range supports a 10-manager lobby (legends depth trims that to 4 per
+  position, so a single-decade legends draft maxes out at 4 managers). A
+  narrow era range or shallow pool with a big lobby
   can still be infeasible — the pool
-  builder errors loudly and the bot tells the host to widen the range or
+  builder errors loudly and the bot tells the host to widen the range,
+  deepen the pool, or
   shrink the lobby. Names/teams/positions/stats are uncopyrightable facts.
-- Record shape: `{id, name, team, pos, ppg, rpg, apg, stars, decade, prime}`.
+- Each player carries `rank`: his 1-based caliber order within his decade ×
+  position bucket (1–10). `Config.pool_depth` filters on it (`legends` ≤ 4,
+  `household` ≤ 7, `deep` all) before the pool is built.
+- Record shape: `{id, name, team, pos, ppg, rpg, apg, stars, decade, prime,
+  rank}`.
 
 ---
 

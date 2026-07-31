@@ -22,7 +22,9 @@ mystery number buys the player (15s clock; a richer manager can still break
 it up by bidding higher). No bid means the
 player is recycled once — on their second appearance (🔔 LAST CALL) they sell
 or get force-assigned at $1. The pool is exactly five players per manager, so
-every player ends up on a roster — zero leftovers. Go broke and you're a
+every player ends up on a roster — zero leftovers. The commissioner also
+picks how deep the pool goes: legends only (~20 per era), household names
+(~35), or the full deep pool (~50, stars + role players — the default). Go broke and you're a
 spectator whose empty slots fill for free at the end; outlast everyone else
 with money and you get free picks from the fully revealed pool. Any player
 can occupy any lineup slot (`/swap` rearranges yours), and rosters/budgets
@@ -116,11 +118,16 @@ private GitHub repo, clone with a fine-grained token URL
    it; default 30), `lineup` (0–300s to arrange lineups after the last
    roster fills; default 60, 0 skips the window), `sim` (**Prompt for your own LLM** / **Off** /
    **Stats only** / **AI + stats**; default Prompt — a copy-pastable prompt
-   you run in your own LLM), and an era range (`era_from` / `era_to`, decade choices from
+   you run in your own LLM), `pool` (**Legends only** ~20 per era /
+   **Household names** ~35 / **Deep** ~50 incl. the role-player tier;
+   default Deep — how deep the player pool goes), and an era range
+   (`era_from` / `era_to`, decade choices from
    **1960s** to **2020s**; default is all eras). Only players whose prime
-   falls inside the range enter the pool — a narrow range with a big lobby
-   may not be feasible, in which case `/draft start` asks you to widen the
-   range or shrink the lobby. It spawns a `🏀 Draft — <date>` thread with a
+   falls inside the range enter the pool — a narrow range or shallow pool
+   with a big lobby may not be feasible, in which case `/draft start` asks
+   you to widen the era range, deepen the pool, or shrink the lobby (legends
+   on a single decade maxes out at 4 managers). It spawns a
+   `🏀 Draft — <date>` thread with a
    lobby; the creator is the commissioner.
 2. Everyone clicks **Join** in the lobby (2–10 managers). Short on humans?
    The commissioner can seat computer opponents with `/draft addcpu [count]`
@@ -197,5 +204,8 @@ All-Star selection) plus the next 5 — the JJ Redick / Tyson Chandler tier —
 so every era offers both headliners and glue guys. Star ratings (1–5⭐) are
 era-relative: each decade's 50 are ranked by caliber and banded into the
 same pyramid (4×5⭐ … 10×1⭐), so every decade carries the full spread from
-fringe pickup to inner-circle superstar. The loader validates positions and
-duplicate ids (see `draftbot/dataset.py`).
+fringe pickup to inner-circle superstar. Each player also carries `rank` —
+his 1-based caliber order within his decade × position bucket (1–10) — which
+powers the pool-depth modes (legends keeps ranks 1–4, household 1–7, deep
+all). The loader validates positions,
+duplicate ids, and rank completeness per bucket (see `draftbot/dataset.py`).

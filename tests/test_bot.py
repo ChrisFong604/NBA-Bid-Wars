@@ -2,8 +2,15 @@
 import discord
 
 from draftbot.bot import DraftBot
+from draftbot.models import Config
 
 ALLOWED_OVERRIDES = {"setup_hook", "on_ready"}
+
+
+def test_default_pool_depth_is_deep():
+    # /draft create's `pool` option and the web create form both default to
+    # "deep" — a Config built with no explicit depth keeps current behavior.
+    assert Config().pool_depth == "deep"
 
 
 def test_no_accidental_client_shadowing():

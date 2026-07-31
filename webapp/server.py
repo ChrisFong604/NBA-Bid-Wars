@@ -42,6 +42,7 @@ app = FastAPI(title="NBA draft rooms")
 registry = RoomRegistry()
 
 SIM_MODES = ("prompt", "off", "stats", "ai")
+POOL_DEPTHS = ("legends", "household", "deep")
 MAX_NAME_LENGTH = 32
 
 
@@ -106,12 +107,16 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
     sim_mode = body.get("sim", "prompt")
     if sim_mode not in SIM_MODES:
         raise _bad(f"sim must be one of: {', '.join(SIM_MODES)}.")
+    pool_depth = body.get("pool_depth", "deep")
+    if pool_depth not in POOL_DEPTHS:
+        raise _bad(f"pool_depth must be one of: {', '.join(POOL_DEPTHS)}.")
     config = Config(
         budget=budget,
         lot_seconds=clock,
         lineup_seconds=lineup,
         era_start=era_from,
         era_end=era_to,
+        pool_depth=pool_depth,
         sim=sim_mode,
     )
     room, token, user_id = registry.create_room(config, name)
@@ -189,6 +194,7 @@ async def _start_draft(room: Room, ws: WebSocket, actor: int, now: float) -> Non
         return
     config = room.state.config
     players = dataset.filter_by_era(players, config.era_start, config.era_end)
+    players = dataset.filter_by_depth(players, config.pool_depth)
     try:
         await registry.dispatch(room, Start(actor, players, now))
     except ValueError as exc:  # pool build failed (era pool too small)
@@ -197,7 +203,7 @@ async def _start_draft(room: Room, ws: WebSocket, actor: int, now: float) -> Non
             ws,
             f"Can't build a pool from the {eras} eras for "
             f"{len(room.state.managers)} managers ({exc}). "
-            "Widen the era range or shrink the lobby.",
+            "Widen the era range, deepen the player pool, or shrink the lobby.",
         )
 
 

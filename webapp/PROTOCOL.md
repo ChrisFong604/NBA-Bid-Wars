@@ -30,7 +30,10 @@ gets `{room, token, user_id}`; `POST /api/rooms/{code}/join` with
 `POST /api/rooms` also accepts `"cpus"` (int 0–8, default 0): the room is
 pre-seeded with that many computer opponents, applied right after creation
 as an `AddCpu` event through the normal dispatch (the engine gates
-capacity, not the server).
+capacity, not the server). It also accepts `"pool_depth"`
+(`"legends"` | `"household"` | `"deep"`, default `"deep"`): how deep the
+player pool goes — legends only (~20 per era), household names (~35), or
+the full pool (~50 incl. the role-player tier).
 
 ## CPU opponents
 
@@ -53,7 +56,8 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
 {
   "phase": "auction", "you": 3, "commissioner": 1,
   "config": {"budget": 20, "lot_seconds": 30, "era_start": 1960,
-              "era_end": 2020, "sim": "prompt", "lineup_seconds": 60},
+              "era_end": 2020, "pool_depth": "deep", "sim": "prompt",
+              "lineup_seconds": 60},
   "queue_count": 12,
   "managers": [{"id": 1, "name": "Chris", "budget": 7, "autopilot": false,
                  "cpu": false,
@@ -136,9 +140,9 @@ or any manager, matching `/simulate`'s draft-member gate).
 
 ## Web-first UX requirements (frontend)
 
-- Lobby: create form (budget / clock / era range / sim mode / lineup
-  window / CPU opponents 0–8), shareable room link (`/#K7QX`), join by
-  name. The commissioner gets an "Add CPU 🤖" button plus a per-CPU
+- Lobby: create form (budget / clock / era range / player pool depth /
+  sim mode / lineup window / CPU opponents 0–8), shareable room link
+  (`/#K7QX`), join by name. The commissioner gets an "Add CPU 🤖" button plus a per-CPU
   remove ✖; CPU managers render with 🤖 in the lobby list and board.
 - Auction: lot card with LIVE ticking countdown (client-side), +$1/+$2/+$5
   and custom-amount bid controls, board sidebar ALWAYS visible (managers,

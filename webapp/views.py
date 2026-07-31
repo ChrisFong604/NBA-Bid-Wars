@@ -135,6 +135,7 @@ def state_view(state: DraftState, viewer_id: int | None) -> dict[str, Any]:
             "lot_seconds": cfg.lot_seconds,
             "era_start": cfg.era_start,
             "era_end": cfg.era_end,
+            "pool_depth": cfg.pool_depth,
             "sim": cfg.sim,
             "lineup_seconds": cfg.lineup_seconds,
         },

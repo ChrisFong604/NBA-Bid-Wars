@@ -1,12 +1,15 @@
 """Integrity checks for the committed cross-era player dataset (DESIGN §4)."""
 from __future__ import annotations
 
+import json
+import random
 from collections import Counter
 
 import pytest
 
-from draftbot.dataset import DECADES, filter_by_era, load_players
-from draftbot.models import SLOTS, Player
+from draftbot import dataset, engine
+from draftbot.dataset import DECADES, filter_by_depth, filter_by_era, load_players
+from draftbot.models import SLOTS, Config, Player
 
 
 @pytest.fixture(scope="module")
@@ -111,6 +114,111 @@ def test_stats_within_sane_bounds(players: tuple[Player, ...]) -> None:
         assert 0.0 <= p.rpg <= 26.0, f"{p.name}: rpg {p.rpg}"
         # 14.5 admits John Stockton's real 3-year peak (14.1 apg, 1988–1991).
         assert 0.0 <= p.apg <= 14.5, f"{p.name}: apg {p.apg}"
+
+
+# -------------------------------------------------------------- caliber rank
+
+
+def test_ranks_complete_within_every_bucket(players: tuple[Player, ...]) -> None:
+    """rank = 1-based caliber order: every decade x position carries 1..10."""
+    for decade in DECADES:
+        for slot in SLOTS:
+            ranks = sorted(
+                p.rank for p in players if p.decade == decade and p.pos == slot
+            )
+            assert ranks == list(range(1, 11)), f"{decade}s {slot}: {ranks}"
+
+
+def _row(i: int, **overrides: object) -> dict:
+    base = {
+        "id": f"p{i}", "name": f"Player {i}", "team": "TST", "pos": "PG",
+        "ppg": 10.0, "rpg": 5.0, "apg": 5.0, "stars": 3,
+        "decade": 1990, "prime": "1991–1993",
+    }
+    base.update(overrides)
+    return base
+
+
+def _patch_dataset(tmp_path, monkeypatch, rows: list[dict]) -> None:
+    path = tmp_path / "players.json"
+    path.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(dataset, "_DATA_PATH", path)
+
+
+def test_pre_rank_file_loads_with_default_rank_10(tmp_path, monkeypatch) -> None:
+    """Old-file tolerance: no "rank" anywhere -> default 10, no bucket check."""
+    _patch_dataset(tmp_path, monkeypatch, [_row(1), _row(2)])
+    loaded = load_players()
+    assert [p.rank for p in loaded] == [10, 10]
+
+
+def test_rank_out_of_range_rejected(tmp_path, monkeypatch) -> None:
+    _patch_dataset(tmp_path, monkeypatch, [_row(1, rank=11)])
+    with pytest.raises(ValueError, match="invalid rank"):
+        load_players()
+
+
+def test_duplicate_rank_in_bucket_rejected(tmp_path, monkeypatch) -> None:
+    _patch_dataset(tmp_path, monkeypatch, [_row(1, rank=1), _row(2, rank=1)])
+    with pytest.raises(ValueError, match="exactly once"):
+        load_players()
+
+
+# ---------------------------------------------------------- filter_by_depth
+
+
+def test_depth_legends_composition(players: tuple[Player, ...]) -> None:
+    pool = filter_by_depth(players, "legends")
+    assert len(pool) == 140  # 7 decades x 20
+    per_decade = Counter(p.decade for p in pool)
+    per_bucket = Counter((p.decade, p.pos) for p in pool)
+    for decade in DECADES:
+        assert per_decade[decade] == 20, f"{decade}s: {per_decade[decade]}"
+        for slot in SLOTS:
+            assert per_bucket[(decade, slot)] == 4
+
+
+def test_depth_household_composition(players: tuple[Player, ...]) -> None:
+    pool = filter_by_depth(players, "household")
+    assert len(pool) == 245  # 7 decades x 35
+    per_decade = Counter(p.decade for p in pool)
+    per_bucket = Counter((p.decade, p.pos) for p in pool)
+    for decade in DECADES:
+        assert per_decade[decade] == 35, f"{decade}s: {per_decade[decade]}"
+        for slot in SLOTS:
+            assert per_bucket[(decade, slot)] == 7
+
+
+def test_depth_deep_keeps_everyone(players: tuple[Player, ...]) -> None:
+    assert filter_by_depth(players, "deep") == players
+
+
+def test_depth_unknown_raises(players: tuple[Player, ...]) -> None:
+    with pytest.raises(ValueError, match="pool depth"):
+        filter_by_depth(players, "shallow")
+
+
+def test_full_range_legends_supports_ten_managers(
+    players: tuple[Player, ...],
+) -> None:
+    pool = filter_by_depth(players, "legends")
+    built = engine.build_pool(pool, 10, Config(), random.Random(1))
+    assert len(built) == 50  # 10 managers x 5 slots
+
+
+def test_single_decade_legends_supports_exactly_four_managers(
+    players: tuple[Player, ...],
+) -> None:
+    """Legends mode on one decade is 4 per position = 20 players: a 4-manager
+    pool (5*4=20) builds, a 5th manager tips it over."""
+    for decade in DECADES:
+        pool = filter_by_depth(filter_by_era(players, decade, decade), "legends")
+        assert len(pool) == 20, f"{decade}s: {len(pool)}"
+    pool = filter_by_depth(filter_by_era(players, 1990, 1990), "legends")
+    built = engine.build_pool(pool, 4, Config(), random.Random(1))
+    assert len(built) == 20
+    with pytest.raises(ValueError, match="not enough players"):
+        engine.build_pool(pool, 5, Config(), random.Random(1))
 
 
 # ------------------------------------------------------------ filter_by_era

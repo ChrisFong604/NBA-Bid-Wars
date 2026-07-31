@@ -9,7 +9,8 @@
   "apg": 10.6,
   "stars": 5,
   "decade": 1960,
-  "prime": "1961–1964"
+  "prime": "1961–1964",
+  "rank": 1
  },
  {
   "id": "jerry-west",
@@ -21,7 +22,8 @@
   "apg": 5.9,
   "stars": 4,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 2
  },
  {
   "id": "dave-bing",
@@ -33,7 +35,8 @@
   "apg": 6.5,
   "stars": 3,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 3
  },
  {
   "id": "gene-shue",
@@ -45,7 +48,8 @@
   "apg": 5.5,
   "stars": 3,
   "decade": 1960,
-  "prime": "1959–1962"
+  "prime": "1959–1962",
+  "rank": 4
  },
  {
   "id": "flynn-robinson",
@@ -57,7 +61,8 @@
   "apg": 4.3,
   "stars": 2,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 5
  },
  {
   "id": "walt-hazzard",
@@ -69,7 +74,8 @@
   "apg": 6.3,
   "stars": 2,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 6
  },
  {
   "id": "kevin-loughery",
@@ -81,7 +87,8 @@
   "apg": 4.0,
   "stars": 1,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 7
  },
  {
   "id": "howard-komives",
@@ -93,7 +100,8 @@
   "apg": 4.8,
   "stars": 1,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 8
  },
  {
   "id": "larry-siegfried",
@@ -105,7 +113,8 @@
   "apg": 4.3,
   "stars": 1,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 9
  },
  {
   "id": "hot-rod-hundley",
@@ -117,7 +126,8 @@
   "apg": 4.0,
   "stars": 1,
   "decade": 1960,
-  "prime": "1958–1961"
+  "prime": "1958–1961",
+  "rank": 10
  },
  {
   "id": "hal-greer",
@@ -129,7 +139,8 @@
   "apg": 4.9,
   "stars": 4,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 1
  },
  {
   "id": "richie-guerin",
@@ -141,7 +152,8 @@
   "apg": 6.5,
   "stars": 4,
   "decade": 1960,
-  "prime": "1959–1962"
+  "prime": "1959–1962",
+  "rank": 2
  },
  {
   "id": "earl-monroe",
@@ -153,7 +165,8 @@
   "apg": 4.7,
   "stars": 3,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 3
  },
  {
   "id": "sam-jones",
@@ -165,7 +178,8 @@
   "apg": 3.0,
   "stars": 3,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 4
  },
  {
   "id": "guy-rodgers",
@@ -177,7 +191,8 @@
   "apg": 9.7,
   "stars": 3,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 5
  },
  {
   "id": "tom-gola",
@@ -189,7 +204,8 @@
   "apg": 4.6,
   "stars": 2,
   "decade": 1960,
-  "prime": "1958–1961"
+  "prime": "1958–1961",
+  "rank": 6
  },
  {
   "id": "don-ohl",
@@ -201,7 +217,8 @@
   "apg": 3.4,
   "stars": 2,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 7
  },
  {
   "id": "jerry-sloan",
@@ -213,7 +230,8 @@
   "apg": 2.9,
   "stars": 2,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 8
  },
  {
   "id": "joe-caldwell",
@@ -225,7 +243,8 @@
   "apg": 3.5,
   "stars": 2,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 9
  },
  {
   "id": "dick-barnett",
@@ -237,7 +256,8 @@
   "apg": 3.0,
   "stars": 1,
   "decade": 1960,
-  "prime": "1965–1968"
+  "prime": "1965–1968",
+  "rank": 10
  },
  {
   "id": "elgin-baylor",
@@ -249,7 +269,8 @@
   "apg": 4.9,
   "stars": 5,
   "decade": 1960,
-  "prime": "1960–1963"
+  "prime": "1960–1963",
+  "rank": 1
  },
  {
   "id": "jack-twyman",
@@ -261,7 +282,8 @@
   "apg": 3.1,
   "stars": 4,
   "decade": 1960,
-  "prime": "1958–1961"
+  "prime": "1958–1961",
+  "rank": 2
  },
  {
   "id": "bailey-howell",
@@ -273,7 +295,8 @@
   "apg": 2.6,
   "stars": 3,
   "decade": 1960,
-  "prime": "1960–1963"
+  "prime": "1960–1963",
+  "rank": 3
  },
  {
   "id": "cliff-hagan",
@@ -285,7 +308,8 @@
   "apg": 4.1,
   "stars": 3,
   "decade": 1960,
-  "prime": "1958–1961"
+  "prime": "1958–1961",
+  "rank": 4
  },
  {
   "id": "willie-naulls",
@@ -297,7 +321,8 @@
   "apg": 2.4,
   "stars": 3,
   "decade": 1960,
-  "prime": "1959–1962"
+  "prime": "1959–1962",
+  "rank": 5
  },
  {
   "id": "dave-debusschere",
@@ -309,7 +334,8 @@
   "apg": 2.6,
   "stars": 3,
   "decade": 1960,
-  "prime": "1965–1968"
+  "prime": "1965–1968",
+  "rank": 6
  },
  {
   "id": "terry-dischinger",
@@ -321,7 +347,8 @@
   "apg": 2.5,
   "stars": 2,
   "decade": 1960,
-  "prime": "1962–1965"
+  "prime": "1962–1965",
+  "rank": 7
  },
  {
   "id": "don-kojis",
@@ -333,7 +360,8 @@
   "apg": 2.3,
   "stars": 2,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 8
  },
  {
   "id": "tom-meschery",
@@ -345,7 +373,8 @@
   "apg": 2.3,
   "stars": 1,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 9
  },
  {
   "id": "fred-hetzel",
@@ -357,7 +386,8 @@
   "apg": 1.5,
   "stars": 1,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 10
  },
  {
   "id": "bob-pettit",
@@ -369,7 +399,8 @@
   "apg": 3.4,
   "stars": 5,
   "decade": 1960,
-  "prime": "1960–1963"
+  "prime": "1960–1963",
+  "rank": 1
  },
  {
   "id": "jerry-lucas",
@@ -381,7 +412,8 @@
   "apg": 3.0,
   "stars": 4,
   "decade": 1960,
-  "prime": "1965–1968"
+  "prime": "1965–1968",
+  "rank": 2
  },
  {
   "id": "tom-heinsohn",
@@ -393,7 +425,8 @@
   "apg": 2.1,
   "stars": 3,
   "decade": 1960,
-  "prime": "1959–1962"
+  "prime": "1959–1962",
+  "rank": 3
  },
  {
   "id": "bill-bridges",
@@ -405,7 +438,8 @@
   "apg": 3.2,
   "stars": 2,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 4
  },
  {
   "id": "johnny-green",
@@ -417,7 +451,8 @@
   "apg": 2.1,
   "stars": 2,
   "decade": 1960,
-  "prime": "1961–1964"
+  "prime": "1961–1964",
+  "rank": 5
  },
  {
   "id": "rudy-larusso",
@@ -429,7 +464,8 @@
   "apg": 2.1,
   "stars": 2,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 6
  },
  {
   "id": "bob-boozer",
@@ -441,7 +477,8 @@
   "apg": 1.6,
   "stars": 2,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 7
  },
  {
   "id": "ray-scott",
@@ -453,7 +490,8 @@
   "apg": 3.2,
   "stars": 2,
   "decade": 1960,
-  "prime": "1963–1966"
+  "prime": "1963–1966",
+  "rank": 8
  },
  {
   "id": "john-block",
@@ -465,7 +503,8 @@
   "apg": 1.7,
   "stars": 1,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 9
  },
  {
   "id": "luke-jackson",
@@ -477,7 +516,8 @@
   "apg": 1.4,
   "stars": 1,
   "decade": 1960,
-  "prime": "1964–1967"
+  "prime": "1964–1967",
+  "rank": 10
  },
  {
   "id": "wilt-chamberlain",
@@ -489,7 +529,8 @@
   "apg": 2.6,
   "stars": 5,
   "decade": 1960,
-  "prime": "1960–1963"
+  "prime": "1960–1963",
+  "rank": 1
  },
  {
   "id": "bill-russell",
@@ -501,7 +542,8 @@
   "apg": 3.9,
   "stars": 4,
   "decade": 1960,
-  "prime": "1959–1962"
+  "prime": "1959–1962",
+  "rank": 2
  },
  {
   "id": "walt-bellamy",
@@ -513,7 +555,8 @@
   "apg": 2.4,
   "stars": 4,
   "decade": 1960,
-  "prime": "1961–1964"
+  "prime": "1961–1964",
+  "rank": 3
  },
  {
   "id": "nate-thurmond",
@@ -525,7 +568,8 @@
   "apg": 3.4,
   "stars": 4,
   "decade": 1960,
-  "prime": "1966–1969"
+  "prime": "1966–1969",
+  "rank": 4
  },
  {
   "id": "wayne-embry",
@@ -537,7 +581,8 @@
   "apg": 2.0,
   "stars": 3,
   "decade": 1960,
-  "prime": "1961–1964"
+  "prime": "1961–1964",
+  "rank": 5
  },
  {
   "id": "red-kerr",
@@ -549,7 +594,8 @@
   "apg": 3.0,
   "stars": 3,
   "decade": 1960,
-  "prime": "1961–1964"
+  "prime": "1961–1964",
+  "rank": 6
  },
  {
   "id": "bob-rule",
@@ -561,7 +607,8 @@
   "apg": 1.6,
   "stars": 3,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 7
  },
  {
   "id": "zelmo-beaty",
@@ -573,7 +620,8 @@
   "apg": 1.7,
   "stars": 2,
   "decade": 1960,
-  "prime": "1965–1968"
+  "prime": "1965–1968",
+  "rank": 8
  },
  {
   "id": "walter-dukes",
@@ -585,7 +633,8 @@
   "apg": 1.3,
   "stars": 2,
   "decade": 1960,
-  "prime": "1958–1961"
+  "prime": "1958–1961",
+  "rank": 9
  },
  {
   "id": "connie-dierking",
@@ -597,7 +646,8 @@
   "apg": 2.4,
   "stars": 1,
   "decade": 1960,
-  "prime": "1967–1970"
+  "prime": "1967–1970",
+  "rank": 10
  },
  {
   "id": "tiny-archibald",
@@ -609,7 +659,8 @@
   "apg": 8.7,
   "stars": 4,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 1
  },
  {
   "id": "lenny-wilkens",
@@ -621,7 +672,8 @@
   "apg": 8.8,
   "stars": 4,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 2
  },
  {
   "id": "walt-frazier",
@@ -633,7 +685,8 @@
   "apg": 6.9,
   "stars": 3,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 3
  },
  {
   "id": "jo-jo-white",
@@ -645,7 +698,8 @@
   "apg": 5.4,
   "stars": 3,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 4
  },
  {
   "id": "charlie-scott",
@@ -657,7 +711,8 @@
   "apg": 5.3,
   "stars": 2,
   "decade": 1970,
-  "prime": "1972–1975"
+  "prime": "1972–1975",
+  "rank": 5
  },
  {
   "id": "archie-clark",
@@ -669,7 +724,8 @@
   "apg": 6.1,
   "stars": 2,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 6
  },
  {
   "id": "geoff-petrie",
@@ -681,7 +737,8 @@
   "apg": 4.7,
   "stars": 1,
   "decade": 1970,
-  "prime": "1972–1975"
+  "prime": "1972–1975",
+  "rank": 7
  },
  {
   "id": "calvin-murphy",
@@ -693,7 +750,8 @@
   "apg": 5.2,
   "stars": 1,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 8
  },
  {
   "id": "norm-van-lier",
@@ -705,7 +763,8 @@
   "apg": 8.1,
   "stars": 1,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 9
  },
  {
   "id": "clem-haskins",
@@ -717,7 +776,8 @@
   "apg": 5.4,
   "stars": 1,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 10
  },
  {
   "id": "pete-maravich",
@@ -729,7 +789,8 @@
   "apg": 5.7,
   "stars": 3,
   "decade": 1970,
-  "prime": "1974–1977"
+  "prime": "1974–1977",
+  "rank": 1
  },
  {
   "id": "gail-goodrich",
@@ -741,7 +802,8 @@
   "apg": 4.7,
   "stars": 3,
   "decade": 1970,
-  "prime": "1971–1974"
+  "prime": "1971–1974",
+  "rank": 2
  },
  {
   "id": "david-thompson",
@@ -753,7 +815,8 @@
   "apg": 3.9,
   "stars": 3,
   "decade": 1970,
-  "prime": "1976–1979"
+  "prime": "1976–1979",
+  "rank": 3
  },
  {
   "id": "paul-westphal",
@@ -765,7 +828,8 @@
   "apg": 5.7,
   "stars": 2,
   "decade": 1970,
-  "prime": "1977–1980"
+  "prime": "1977–1980",
+  "rank": 4
  },
  {
   "id": "jeff-mullins",
@@ -777,7 +841,8 @@
   "apg": 4.5,
   "stars": 2,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 5
  },
  {
   "id": "randy-smith",
@@ -789,7 +854,8 @@
   "apg": 5.6,
   "stars": 2,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 6
  },
  {
   "id": "dick-van-arsdale",
@@ -801,7 +867,8 @@
   "apg": 4.4,
   "stars": 2,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 7
  },
  {
   "id": "phil-chenier",
@@ -813,7 +880,8 @@
   "apg": 3.5,
   "stars": 1,
   "decade": 1970,
-  "prime": "1972–1975"
+  "prime": "1972–1975",
+  "rank": 8
  },
  {
   "id": "doug-collins",
@@ -825,7 +893,8 @@
   "apg": 3.7,
   "stars": 1,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 9
  },
  {
   "id": "phil-smith",
@@ -837,7 +906,8 @@
   "apg": 4.4,
   "stars": 1,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 10
  },
  {
   "id": "john-havlicek",
@@ -849,7 +919,8 @@
   "apg": 7.3,
   "stars": 5,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 1
  },
  {
   "id": "rick-barry",
@@ -861,7 +932,8 @@
   "apg": 4.9,
   "stars": 4,
   "decade": 1970,
-  "prime": "1966–1974"
+  "prime": "1966–1974",
+  "rank": 2
  },
  {
   "id": "billy-cunningham",
@@ -873,7 +945,8 @@
   "apg": 5.0,
   "stars": 4,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 3
  },
  {
   "id": "lou-hudson",
@@ -885,7 +958,8 @@
   "apg": 3.6,
   "stars": 3,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 4
  },
  {
   "id": "connie-hawkins",
@@ -897,7 +971,8 @@
   "apg": 4.4,
   "stars": 3,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 5
  },
  {
   "id": "walter-davis",
@@ -909,7 +984,8 @@
   "apg": 4.1,
   "stars": 3,
   "decade": 1970,
-  "prime": "1977–1980"
+  "prime": "1977–1980",
+  "rank": 6
  },
  {
   "id": "chet-walker",
@@ -921,7 +997,8 @@
   "apg": 2.3,
   "stars": 3,
   "decade": 1970,
-  "prime": "1969–1972"
+  "prime": "1969–1972",
+  "rank": 7
  },
  {
   "id": "bob-dandridge",
@@ -933,7 +1010,8 @@
   "apg": 3.2,
   "stars": 2,
   "decade": 1970,
-  "prime": "1974–1977"
+  "prime": "1974–1977",
+  "rank": 8
  },
  {
   "id": "john-drew",
@@ -945,7 +1023,8 @@
   "apg": 1.9,
   "stars": 2,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 9
  },
  {
   "id": "tom-van-arsdale",
@@ -957,7 +1036,8 @@
   "apg": 2.4,
   "stars": 1,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 10
  },
  {
   "id": "spencer-haywood",
@@ -969,7 +1049,8 @@
   "apg": 2.6,
   "stars": 4,
   "decade": 1970,
-  "prime": "1971–1974"
+  "prime": "1971–1974",
+  "rank": 1
  },
  {
   "id": "sidney-wicks",
@@ -981,7 +1062,8 @@
   "apg": 4.7,
   "stars": 3,
   "decade": 1970,
-  "prime": "1971–1974"
+  "prime": "1971–1974",
+  "rank": 2
  },
  {
   "id": "george-mcginnis",
@@ -993,7 +1075,8 @@
   "apg": 4.1,
   "stars": 3,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 3
  },
  {
   "id": "rudy-tomjanovich",
@@ -1005,7 +1088,8 @@
   "apg": 2.7,
   "stars": 3,
   "decade": 1970,
-  "prime": "1972–1975"
+  "prime": "1972–1975",
+  "rank": 4
  },
  {
   "id": "bob-love",
@@ -1017,7 +1101,8 @@
   "apg": 1.8,
   "stars": 2,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 5
  },
  {
   "id": "larry-kenon",
@@ -1029,7 +1114,8 @@
   "apg": 3.4,
   "stars": 2,
   "decade": 1970,
-  "prime": "1976–1979"
+  "prime": "1976–1979",
+  "rank": 6
  },
  {
   "id": "gus-johnson",
@@ -1041,7 +1127,8 @@
   "apg": 2.9,
   "stars": 2,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 7
  },
  {
   "id": "truck-robinson",
@@ -1053,7 +1140,8 @@
   "apg": 1.8,
   "stars": 2,
   "decade": 1970,
-  "prime": "1976–1979"
+  "prime": "1976–1979",
+  "rank": 8
  },
  {
   "id": "maurice-lucas",
@@ -1065,7 +1153,8 @@
   "apg": 2.8,
   "stars": 2,
   "decade": 1970,
-  "prime": "1976–1979"
+  "prime": "1976–1979",
+  "rank": 9
  },
  {
   "id": "paul-silas",
@@ -1077,7 +1166,8 @@
   "apg": 3.5,
   "stars": 1,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 10
  },
  {
   "id": "kareem-abdul-jabbar",
@@ -1089,7 +1179,8 @@
   "apg": 4.3,
   "stars": 5,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 1
  },
  {
   "id": "elvin-hayes",
@@ -1101,7 +1192,8 @@
   "apg": 1.9,
   "stars": 5,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 2
  },
  {
   "id": "bob-mcadoo",
@@ -1113,7 +1205,8 @@
   "apg": 2.8,
   "stars": 5,
   "decade": 1970,
-  "prime": "1973–1976"
+  "prime": "1973–1976",
+  "rank": 3
  },
  {
   "id": "bob-lanier",
@@ -1125,7 +1218,8 @@
   "apg": 3.5,
   "stars": 4,
   "decade": 1970,
-  "prime": "1971–1974"
+  "prime": "1971–1974",
+  "rank": 4
  },
  {
   "id": "dave-cowens",
@@ -1137,7 +1231,8 @@
   "apg": 4.3,
   "stars": 4,
   "decade": 1970,
-  "prime": "1972–1975"
+  "prime": "1972–1975",
+  "rank": 5
  },
  {
   "id": "willis-reed",
@@ -1149,7 +1244,8 @@
   "apg": 2.1,
   "stars": 4,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 6
  },
  {
   "id": "artis-gilmore",
@@ -1161,7 +1257,8 @@
   "apg": 3.0,
   "stars": 3,
   "decade": 1970,
-  "prime": "1976–1979"
+  "prime": "1976–1979",
+  "rank": 7
  },
  {
   "id": "wes-unseld",
@@ -1173,7 +1270,8 @@
   "apg": 3.3,
   "stars": 2,
   "decade": 1970,
-  "prime": "1968–1971"
+  "prime": "1968–1971",
+  "rank": 8
  },
  {
   "id": "bob-kauffman",
@@ -1185,7 +1283,8 @@
   "apg": 4.5,
   "stars": 2,
   "decade": 1970,
-  "prime": "1970–1973"
+  "prime": "1970–1973",
+  "rank": 9
  },
  {
   "id": "bill-walton",
@@ -1197,7 +1296,8 @@
   "apg": 4.3,
   "stars": 1,
   "decade": 1970,
-  "prime": "1975–1978"
+  "prime": "1975–1978",
+  "rank": 10
  },
  {
   "id": "magic-johnson",
@@ -1209,7 +1309,8 @@
   "apg": 12.3,
   "stars": 5,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 1
  },
  {
   "id": "isiah-thomas",
@@ -1221,7 +1322,8 @@
   "apg": 11.9,
   "stars": 4,
   "decade": 1980,
-  "prime": "1983–1986"
+  "prime": "1983–1986",
+  "rank": 2
  },
  {
   "id": "gus-williams",
@@ -1233,7 +1335,8 @@
   "apg": 6.6,
   "stars": 2,
   "decade": 1980,
-  "prime": "1979–1983"
+  "prime": "1979–1983",
+  "rank": 3
  },
  {
   "id": "terry-porter",
@@ -1245,7 +1348,8 @@
   "apg": 9.6,
   "stars": 2,
   "decade": 1980,
-  "prime": "1987–1990"
+  "prime": "1987–1990",
+  "rank": 4
  },
  {
   "id": "norm-nixon",
@@ -1257,7 +1361,8 @@
   "apg": 8.5,
   "stars": 1,
   "decade": 1980,
-  "prime": "1978–1981"
+  "prime": "1978–1981",
+  "rank": 5
  },
  {
   "id": "maurice-cheeks",
@@ -1269,7 +1374,8 @@
   "apg": 8.4,
   "stars": 1,
   "decade": 1980,
-  "prime": "1985–1988"
+  "prime": "1985–1988",
+  "rank": 6
  },
  {
   "id": "sleepy-floyd",
@@ -1281,7 +1387,8 @@
   "apg": 8.1,
   "stars": 1,
   "decade": 1980,
-  "prime": "1984–1987"
+  "prime": "1984–1987",
+  "rank": 7
  },
  {
   "id": "ray-williams",
@@ -1293,7 +1400,8 @@
   "apg": 5.9,
   "stars": 1,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 8
  },
  {
   "id": "danny-ainge",
@@ -1305,7 +1413,8 @@
   "apg": 5.9,
   "stars": 1,
   "decade": 1980,
-  "prime": "1987–1990"
+  "prime": "1987–1990",
+  "rank": 9
  },
  {
   "id": "mark-jackson",
@@ -1317,7 +1426,8 @@
   "apg": 8.9,
   "stars": 1,
   "decade": 1980,
-  "prime": "1987–1990"
+  "prime": "1987–1990",
+  "rank": 10
  },
  {
   "id": "michael-jordan",
@@ -1329,7 +1439,8 @@
   "apg": 6.2,
   "stars": 5,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 1
  },
  {
   "id": "clyde-drexler",
@@ -1341,7 +1452,8 @@
   "apg": 5.8,
   "stars": 4,
   "decade": 1980,
-  "prime": "1987–1990"
+  "prime": "1987–1990",
+  "rank": 2
  },
  {
   "id": "george-gervin",
@@ -1353,7 +1465,8 @@
   "apg": 2.7,
   "stars": 4,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 3
  },
  {
   "id": "sidney-moncrief",
@@ -1365,7 +1478,8 @@
   "apg": 4.5,
   "stars": 3,
   "decade": 1980,
-  "prime": "1982–1985"
+  "prime": "1982–1985",
+  "rank": 4
  },
  {
   "id": "world-b-free",
@@ -1377,7 +1491,8 @@
   "apg": 4.7,
   "stars": 3,
   "decade": 1980,
-  "prime": "1978–1981"
+  "prime": "1978–1981",
+  "rank": 5
  },
  {
   "id": "fat-lever",
@@ -1389,7 +1504,8 @@
   "apg": 7.9,
   "stars": 3,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 6
  },
  {
   "id": "michael-ray-richardson",
@@ -1401,7 +1517,8 @@
   "apg": 8.3,
   "stars": 2,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 7
  },
  {
   "id": "otis-birdsong",
@@ -1413,7 +1530,8 @@
   "apg": 3.1,
   "stars": 2,
   "decade": 1980,
-  "prime": "1978–1981"
+  "prime": "1978–1981",
+  "rank": 8
  },
  {
   "id": "dale-ellis",
@@ -1425,7 +1543,8 @@
   "apg": 2.5,
   "stars": 2,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 9
  },
  {
   "id": "alvin-robertson",
@@ -1437,7 +1556,8 @@
   "apg": 6.0,
   "stars": 2,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 10
  },
  {
   "id": "larry-bird",
@@ -1449,7 +1569,8 @@
   "apg": 7.0,
   "stars": 5,
   "decade": 1980,
-  "prime": "1984–1987"
+  "prime": "1984–1987",
+  "rank": 1
  },
  {
   "id": "dominique-wilkins",
@@ -1461,7 +1582,8 @@
   "apg": 2.9,
   "stars": 4,
   "decade": 1980,
-  "prime": "1985–1988"
+  "prime": "1985–1988",
+  "rank": 2
  },
  {
   "id": "julius-erving",
@@ -1473,7 +1595,8 @@
   "apg": 4.3,
   "stars": 4,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 3
  },
  {
   "id": "alex-english",
@@ -1485,7 +1608,8 @@
   "apg": 4.4,
   "stars": 4,
   "decade": 1980,
-  "prime": "1984–1987"
+  "prime": "1984–1987",
+  "rank": 4
  },
  {
   "id": "adrian-dantley",
@@ -1497,7 +1621,8 @@
   "apg": 3.6,
   "stars": 4,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 5
  },
  {
   "id": "mark-aguirre",
@@ -1509,7 +1634,8 @@
   "apg": 3.9,
   "stars": 3,
   "decade": 1980,
-  "prime": "1982–1985"
+  "prime": "1982–1985",
+  "rank": 6
  },
  {
   "id": "marques-johnson",
@@ -1521,7 +1647,8 @@
   "apg": 3.7,
   "stars": 3,
   "decade": 1980,
-  "prime": "1978–1981"
+  "prime": "1978–1981",
+  "rank": 7
  },
  {
   "id": "bernard-king",
@@ -1533,7 +1660,8 @@
   "apg": 2.8,
   "stars": 3,
   "decade": 1980,
-  "prime": "1982–1985"
+  "prime": "1982–1985",
+  "rank": 8
  },
  {
   "id": "purvis-short",
@@ -1545,7 +1673,8 @@
   "apg": 3.2,
   "stars": 2,
   "decade": 1980,
-  "prime": "1983–1986"
+  "prime": "1983–1986",
+  "rank": 9
  },
  {
   "id": "jamaal-wilkes",
@@ -1557,7 +1686,8 @@
   "apg": 2.9,
   "stars": 2,
   "decade": 1980,
-  "prime": "1978–1981"
+  "prime": "1978–1981",
+  "rank": 10
  },
  {
   "id": "charles-barkley",
@@ -1569,7 +1699,8 @@
   "apg": 4.0,
   "stars": 4,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 1
  },
  {
   "id": "kevin-mchale",
@@ -1581,7 +1712,8 @@
   "apg": 2.5,
   "stars": 3,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 2
  },
  {
   "id": "tom-chambers",
@@ -1593,7 +1725,8 @@
   "apg": 2.6,
   "stars": 3,
   "decade": 1980,
-  "prime": "1987–1990"
+  "prime": "1987–1990",
+  "rank": 3
  },
  {
   "id": "ralph-sampson",
@@ -1605,7 +1738,8 @@
   "apg": 2.8,
   "stars": 3,
   "decade": 1980,
-  "prime": "1983–1986"
+  "prime": "1983–1986",
+  "rank": 4
  },
  {
   "id": "terry-cummings",
@@ -1617,7 +1751,8 @@
   "apg": 2.4,
   "stars": 3,
   "decade": 1980,
-  "prime": "1982–1985"
+  "prime": "1982–1985",
+  "rank": 5
  },
  {
   "id": "kiki-vandeweghe",
@@ -1629,7 +1764,8 @@
   "apg": 2.9,
   "stars": 3,
   "decade": 1980,
-  "prime": "1981–1984"
+  "prime": "1981–1984",
+  "rank": 6
  },
  {
   "id": "larry-nance",
@@ -1641,7 +1777,8 @@
   "apg": 3.3,
   "stars": 2,
   "decade": 1980,
-  "prime": "1985–1988"
+  "prime": "1985–1988",
+  "rank": 7
  },
  {
   "id": "dan-roundfield",
@@ -1653,7 +1790,8 @@
   "apg": 2.7,
   "stars": 2,
   "decade": 1980,
-  "prime": "1981–1984"
+  "prime": "1981–1984",
+  "rank": 8
  },
  {
   "id": "buck-williams",
@@ -1665,7 +1803,8 @@
   "apg": 1.7,
   "stars": 2,
   "decade": 1980,
-  "prime": "1984–1987"
+  "prime": "1984–1987",
+  "rank": 9
  },
  {
   "id": "otis-thorpe",
@@ -1677,7 +1816,8 @@
   "apg": 2.7,
   "stars": 1,
   "decade": 1980,
-  "prime": "1986–1989"
+  "prime": "1986–1989",
+  "rank": 10
  },
  {
   "id": "moses-malone",
@@ -1689,7 +1829,8 @@
   "apg": 1.8,
   "stars": 5,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 1
  },
  {
   "id": "robert-parish",
@@ -1701,7 +1842,8 @@
   "apg": 1.8,
   "stars": 3,
   "decade": 1980,
-  "prime": "1981–1984"
+  "prime": "1981–1984",
+  "rank": 2
  },
  {
   "id": "jack-sikma",
@@ -1713,7 +1855,8 @@
   "apg": 3.5,
   "stars": 3,
   "decade": 1980,
-  "prime": "1981–1984"
+  "prime": "1981–1984",
+  "rank": 3
  },
  {
   "id": "bill-laimbeer",
@@ -1725,7 +1868,8 @@
   "apg": 1.8,
   "stars": 2,
   "decade": 1980,
-  "prime": "1983–1986"
+  "prime": "1983–1986",
+  "rank": 4
  },
  {
   "id": "dan-issel",
@@ -1737,7 +1881,8 @@
   "apg": 2.2,
   "stars": 2,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 5
  },
  {
   "id": "jeff-ruland",
@@ -1749,7 +1894,8 @@
   "apg": 2.8,
   "stars": 2,
   "decade": 1980,
-  "prime": "1981–1984"
+  "prime": "1981–1984",
+  "rank": 6
  },
  {
   "id": "joe-barry-carroll",
@@ -1761,7 +1907,8 @@
   "apg": 2.3,
   "stars": 2,
   "decade": 1980,
-  "prime": "1982–1986"
+  "prime": "1982–1986",
+  "rank": 7
  },
  {
   "id": "mychal-thompson",
@@ -1773,7 +1920,8 @@
   "apg": 4.1,
   "stars": 1,
   "decade": 1980,
-  "prime": "1980–1983"
+  "prime": "1980–1983",
+  "rank": 8
  },
  {
   "id": "bill-cartwright",
@@ -1785,7 +1933,8 @@
   "apg": 1.5,
   "stars": 1,
   "decade": 1980,
-  "prime": "1979–1982"
+  "prime": "1979–1982",
+  "rank": 9
  },
  {
   "id": "herb-williams",
@@ -1797,7 +1946,8 @@
   "apg": 2.9,
   "stars": 1,
   "decade": 1980,
-  "prime": "1983–1986"
+  "prime": "1983–1986",
+  "rank": 10
  },
  {
   "id": "john-stockton",
@@ -1809,7 +1959,8 @@
   "apg": 14.1,
   "stars": 4,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 1
  },
  {
   "id": "tim-hardaway",
@@ -1821,7 +1972,8 @@
   "apg": 10.1,
   "stars": 4,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 2
  },
  {
   "id": "kevin-johnson",
@@ -1833,7 +1985,8 @@
   "apg": 11.2,
   "stars": 4,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 3
  },
  {
   "id": "anfernee-hardaway",
@@ -1845,7 +1998,8 @@
   "apg": 6.7,
   "stars": 3,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 4
  },
  {
   "id": "mark-price",
@@ -1857,7 +2011,8 @@
   "apg": 8.3,
   "stars": 3,
   "decade": 1990,
-  "prime": "1988–1992"
+  "prime": "1988–1992",
+  "rank": 5
  },
  {
   "id": "michael-adams",
@@ -1869,7 +2024,8 @@
   "apg": 8.5,
   "stars": 2,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 6
  },
  {
   "id": "rod-strickland",
@@ -1881,7 +2037,8 @@
   "apg": 9.6,
   "stars": 2,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 7
  },
  {
   "id": "damon-stoudamire",
@@ -1893,7 +2050,8 @@
   "apg": 8.8,
   "stars": 2,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 8
  },
  {
   "id": "kenny-anderson",
@@ -1905,7 +2063,8 @@
   "apg": 9.1,
   "stars": 2,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 9
  },
  {
   "id": "terrell-brandon",
@@ -1917,7 +2076,8 @@
   "apg": 6.7,
   "stars": 2,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 10
  },
  {
   "id": "mitch-richmond",
@@ -1929,7 +2089,8 @@
   "apg": 3.7,
   "stars": 3,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 1
  },
  {
   "id": "reggie-miller",
@@ -1941,7 +2102,8 @@
   "apg": 3.9,
   "stars": 3,
   "decade": 1990,
-  "prime": "1989–1992"
+  "prime": "1989–1992",
+  "rank": 2
  },
  {
   "id": "joe-dumars",
@@ -1953,7 +2115,8 @@
   "apg": 4.7,
   "stars": 3,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 3
  },
  {
   "id": "latrell-sprewell",
@@ -1965,7 +2128,8 @@
   "apg": 4.9,
   "stars": 3,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 4
  },
  {
   "id": "jeff-hornacek",
@@ -1977,7 +2141,8 @@
   "apg": 5.7,
   "stars": 2,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 5
  },
  {
   "id": "hersey-hawkins",
@@ -1989,7 +2154,8 @@
   "apg": 3.6,
   "stars": 2,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 6
  },
  {
   "id": "reggie-lewis",
@@ -2001,7 +2167,8 @@
   "apg": 2.8,
   "stars": 2,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 7
  },
  {
   "id": "dan-majerle",
@@ -2013,7 +2180,8 @@
   "apg": 3.5,
   "stars": 1,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 8
  },
  {
   "id": "ron-harper",
@@ -2025,7 +2193,8 @@
   "apg": 4.7,
   "stars": 1,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 9
  },
  {
   "id": "steve-smith",
@@ -2037,7 +2206,8 @@
   "apg": 3.6,
   "stars": 1,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 10
  },
  {
   "id": "grant-hill",
@@ -2049,7 +2219,8 @@
   "apg": 7.0,
   "stars": 4,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 1
  },
  {
   "id": "scottie-pippen",
@@ -2061,7 +2232,8 @@
   "apg": 6.3,
   "stars": 4,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 2
  },
  {
   "id": "chris-mullin",
@@ -2073,7 +2245,8 @@
   "apg": 4.4,
   "stars": 4,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 3
  },
  {
   "id": "james-worthy",
@@ -2085,7 +2258,8 @@
   "apg": 3.6,
   "stars": 3,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 4
  },
  {
   "id": "glen-rice",
@@ -2097,7 +2271,8 @@
   "apg": 2.4,
   "stars": 3,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 5
  },
  {
   "id": "clifford-robinson",
@@ -2109,7 +2284,8 @@
   "apg": 2.3,
   "stars": 2,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 6
  },
  {
   "id": "lionel-simmons",
@@ -2121,7 +2297,8 @@
   "apg": 4.3,
   "stars": 2,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 7
  },
  {
   "id": "clarence-weatherspoon",
@@ -2133,7 +2310,8 @@
   "apg": 2.4,
   "stars": 1,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 8
  },
  {
   "id": "cedric-ceballos",
@@ -2145,7 +2323,8 @@
   "apg": 1.6,
   "stars": 1,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 9
  },
  {
   "id": "sean-elliott",
@@ -2157,7 +2336,8 @@
   "apg": 3.1,
   "stars": 1,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 10
  },
  {
   "id": "karl-malone",
@@ -2169,7 +2349,8 @@
   "apg": 2.9,
   "stars": 5,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 1
  },
  {
   "id": "shawn-kemp",
@@ -2181,7 +2362,8 @@
   "apg": 2.2,
   "stars": 3,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 2
  },
  {
   "id": "vin-baker",
@@ -2193,7 +2375,8 @@
   "apg": 3.0,
   "stars": 3,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 3
  },
  {
   "id": "derrick-coleman",
@@ -2205,7 +2388,8 @@
   "apg": 3.4,
   "stars": 3,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 4
  },
  {
   "id": "detlef-schrempf",
@@ -2217,7 +2401,8 @@
   "apg": 4.5,
   "stars": 3,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 5
  },
  {
   "id": "danny-manning",
@@ -2229,7 +2414,8 @@
   "apg": 3.3,
   "stars": 2,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 6
  },
  {
   "id": "kevin-willis",
@@ -2241,7 +2427,8 @@
   "apg": 2.0,
   "stars": 2,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 7
  },
  {
   "id": "larry-johnson",
@@ -2253,7 +2440,8 @@
   "apg": 3.9,
   "stars": 2,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 8
  },
  {
   "id": "juwan-howard",
@@ -2265,7 +2453,8 @@
   "apg": 3.9,
   "stars": 2,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 9
  },
  {
   "id": "anthony-mason",
@@ -2277,7 +2466,8 @@
   "apg": 4.7,
   "stars": 2,
   "decade": 1990,
-  "prime": "1995–1998"
+  "prime": "1995–1998",
+  "rank": 10
  },
  {
   "id": "hakeem-olajuwon",
@@ -2289,7 +2479,8 @@
   "apg": 3.5,
   "stars": 5,
   "decade": 1990,
-  "prime": "1992–1995"
+  "prime": "1992–1995",
+  "rank": 1
  },
  {
   "id": "david-robinson",
@@ -2301,7 +2492,8 @@
   "apg": 3.6,
   "stars": 5,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 2
  },
  {
   "id": "patrick-ewing",
@@ -2313,7 +2505,8 @@
   "apg": 2.4,
   "stars": 5,
   "decade": 1990,
-  "prime": "1989–1992"
+  "prime": "1989–1992",
+  "rank": 3
  },
  {
   "id": "alonzo-mourning",
@@ -2325,7 +2518,8 @@
   "apg": 1.8,
   "stars": 4,
   "decade": 1990,
-  "prime": "1994–1997"
+  "prime": "1994–1997",
+  "rank": 4
  },
  {
   "id": "brad-daugherty",
@@ -2337,7 +2531,8 @@
   "apg": 3.8,
   "stars": 4,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 5
  },
  {
   "id": "dikembe-mutombo",
@@ -2349,7 +2544,8 @@
   "apg": 1.8,
   "stars": 3,
   "decade": 1990,
-  "prime": "1991–1994"
+  "prime": "1991–1994",
+  "rank": 6
  },
  {
   "id": "vlade-divac",
@@ -2361,7 +2557,8 @@
   "apg": 3.8,
   "stars": 1,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 7
  },
  {
   "id": "rony-seikaly",
@@ -2373,7 +2570,8 @@
   "apg": 1.4,
   "stars": 1,
   "decade": 1990,
-  "prime": "1990–1993"
+  "prime": "1990–1993",
+  "rank": 8
  },
  {
   "id": "rik-smits",
@@ -2385,7 +2583,8 @@
   "apg": 1.7,
   "stars": 1,
   "decade": 1990,
-  "prime": "1993–1996"
+  "prime": "1993–1996",
+  "rank": 9
  },
  {
   "id": "benoit-benjamin",
@@ -2397,7 +2596,8 @@
   "apg": 2.0,
   "stars": 1,
   "decade": 1990,
-  "prime": "1988–1991"
+  "prime": "1988–1991",
+  "rank": 10
  },
  {
   "id": "allen-iverson",
@@ -2409,7 +2609,8 @@
   "apg": 7.5,
   "stars": 4,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 1
  },
  {
   "id": "chris-paul",
@@ -2421,7 +2622,8 @@
   "apg": 10.6,
   "stars": 4,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 2
  },
  {
   "id": "gary-payton",
@@ -2433,7 +2635,8 @@
   "apg": 8.7,
   "stars": 4,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 3
  },
  {
   "id": "jason-kidd",
@@ -2445,7 +2648,8 @@
   "apg": 9.5,
   "stars": 3,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 4
  },
  {
   "id": "steve-nash",
@@ -2457,7 +2661,8 @@
   "apg": 11.1,
   "stars": 3,
   "decade": 2000,
-  "prime": "2005–2008"
+  "prime": "2005–2008",
+  "rank": 5
  },
  {
   "id": "gilbert-arenas",
@@ -2469,7 +2674,8 @@
   "apg": 5.7,
   "stars": 3,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 6
  },
  {
   "id": "tony-parker",
@@ -2481,7 +2687,8 @@
   "apg": 6.1,
   "stars": 3,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 7
  },
  {
   "id": "stephon-marbury",
@@ -2493,7 +2700,8 @@
   "apg": 8.0,
   "stars": 2,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 8
  },
  {
   "id": "steve-francis",
@@ -2505,7 +2713,8 @@
   "apg": 6.4,
   "stars": 2,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 9
  },
  {
   "id": "chauncey-billups",
@@ -2517,7 +2726,8 @@
   "apg": 7.6,
   "stars": 2,
   "decade": 2000,
-  "prime": "2005–2008"
+  "prime": "2005–2008",
+  "rank": 10
  },
  {
   "id": "kobe-bryant",
@@ -2529,7 +2739,8 @@
   "apg": 5.1,
   "stars": 5,
   "decade": 2000,
-  "prime": "2005–2008"
+  "prime": "2005–2008",
+  "rank": 1
  },
  {
   "id": "tracy-mcgrady",
@@ -2541,7 +2752,8 @@
   "apg": 5.4,
   "stars": 4,
   "decade": 2000,
-  "prime": "2001–2004"
+  "prime": "2001–2004",
+  "rank": 2
  },
  {
   "id": "paul-pierce",
@@ -2553,7 +2765,8 @@
   "apg": 3.6,
   "stars": 4,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 3
  },
  {
   "id": "vince-carter",
@@ -2565,7 +2778,8 @@
   "apg": 4.4,
   "stars": 3,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 4
  },
  {
   "id": "ray-allen",
@@ -2577,7 +2791,8 @@
   "apg": 3.8,
   "stars": 3,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 5
  },
  {
   "id": "joe-johnson",
@@ -2589,7 +2804,8 @@
   "apg": 5.5,
   "stars": 3,
   "decade": 2000,
-  "prime": "2007–2010"
+  "prime": "2007–2010",
+  "rank": 6
  },
  {
   "id": "jerry-stackhouse",
@@ -2601,7 +2817,8 @@
   "apg": 5.0,
   "stars": 2,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 7
  },
  {
   "id": "brandon-roy",
@@ -2613,7 +2830,8 @@
   "apg": 5.2,
   "stars": 2,
   "decade": 2000,
-  "prime": "2007–2010"
+  "prime": "2007–2010",
+  "rank": 8
  },
  {
   "id": "michael-redd",
@@ -2625,7 +2843,8 @@
   "apg": 2.5,
   "stars": 2,
   "decade": 2000,
-  "prime": "2003–2006"
+  "prime": "2003–2006",
+  "rank": 9
  },
  {
   "id": "richard-hamilton",
@@ -2637,7 +2856,8 @@
   "apg": 4.0,
   "stars": 1,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 10
  },
  {
   "id": "lebron-james",
@@ -2649,7 +2869,8 @@
   "apg": 7.7,
   "stars": 5,
   "decade": 2000,
-  "prime": "2007–2010"
+  "prime": "2007–2010",
+  "rank": 1
  },
  {
   "id": "carmelo-anthony",
@@ -2661,7 +2882,8 @@
   "apg": 3.3,
   "stars": 4,
   "decade": 2000,
-  "prime": "2005–2008"
+  "prime": "2005–2008",
+  "rank": 2
  },
  {
   "id": "michael-finley",
@@ -2673,7 +2895,8 @@
   "apg": 4.4,
   "stars": 2,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 3
  },
  {
   "id": "antawn-jamison",
@@ -2685,7 +2908,8 @@
   "apg": 2.0,
   "stars": 2,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 4
  },
  {
   "id": "peja-stojakovic",
@@ -2697,7 +2921,8 @@
   "apg": 2.2,
   "stars": 2,
   "decade": 2000,
-  "prime": "2001–2004"
+  "prime": "2001–2004",
+  "rank": 5
  },
  {
   "id": "shareef-abdur-rahim",
@@ -2709,7 +2934,8 @@
   "apg": 3.2,
   "stars": 2,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 6
  },
  {
   "id": "glenn-robinson",
@@ -2721,7 +2947,8 @@
   "apg": 3.0,
   "stars": 2,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 7
  },
  {
   "id": "caron-butler",
@@ -2733,7 +2960,8 @@
   "apg": 4.3,
   "stars": 1,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 8
  },
  {
   "id": "andre-iguodala",
@@ -2745,7 +2973,8 @@
   "apg": 5.3,
   "stars": 1,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 9
  },
  {
   "id": "jalen-rose",
@@ -2757,7 +2986,8 @@
   "apg": 5.0,
   "stars": 1,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 10
  },
  {
   "id": "kevin-garnett",
@@ -2769,7 +2999,8 @@
   "apg": 5.6,
   "stars": 5,
   "decade": 2000,
-  "prime": "2002–2005"
+  "prime": "2002–2005",
+  "rank": 1
  },
  {
   "id": "tim-duncan",
@@ -2781,7 +3012,8 @@
   "apg": 3.6,
   "stars": 4,
   "decade": 2000,
-  "prime": "2001–2004"
+  "prime": "2001–2004",
+  "rank": 2
  },
  {
   "id": "dirk-nowitzki",
@@ -2793,7 +3025,8 @@
   "apg": 3.1,
   "stars": 4,
   "decade": 2000,
-  "prime": "2004–2007"
+  "prime": "2004–2007",
+  "rank": 3
  },
  {
   "id": "chris-webber",
@@ -2805,7 +3038,8 @@
   "apg": 4.5,
   "stars": 3,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 4
  },
  {
   "id": "jermaine-o-neal",
@@ -2817,7 +3051,8 @@
   "apg": 1.9,
   "stars": 3,
   "decade": 2000,
-  "prime": "2001–2004"
+  "prime": "2001–2004",
+  "rank": 5
  },
  {
   "id": "antoine-walker",
@@ -2829,7 +3064,8 @@
   "apg": 5.1,
   "stars": 3,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 6
  },
  {
   "id": "shawn-marion",
@@ -2841,7 +3077,8 @@
   "apg": 2.1,
   "stars": 2,
   "decade": 2000,
-  "prime": "2003–2006"
+  "prime": "2003–2006",
+  "rank": 7
  },
  {
   "id": "elton-brand",
@@ -2853,7 +3090,8 @@
   "apg": 2.8,
   "stars": 2,
   "decade": 2000,
-  "prime": "2003–2006"
+  "prime": "2003–2006",
+  "rank": 8
  },
  {
   "id": "rasheed-wallace",
@@ -2865,7 +3103,8 @@
   "apg": 2.3,
   "stars": 2,
   "decade": 2000,
-  "prime": "2000–2003"
+  "prime": "2000–2003",
+  "rank": 9
  },
  {
   "id": "david-west",
@@ -2877,7 +3116,8 @@
   "apg": 2.5,
   "stars": 2,
   "decade": 2000,
-  "prime": "2007–2010"
+  "prime": "2007–2010",
+  "rank": 10
  },
  {
   "id": "shaquille-o-neal",
@@ -2889,7 +3129,8 @@
   "apg": 3.5,
   "stars": 5,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 1
  },
  {
   "id": "chris-bosh",
@@ -2901,7 +3142,8 @@
   "apg": 2.5,
   "stars": 3,
   "decade": 2000,
-  "prime": "2007–2010"
+  "prime": "2007–2010",
+  "rank": 2
  },
  {
   "id": "amar-e-stoudemire",
@@ -2913,7 +3155,8 @@
   "apg": 1.4,
   "stars": 3,
   "decade": 2000,
-  "prime": "2004–2008"
+  "prime": "2004–2008",
+  "rank": 3
  },
  {
   "id": "yao-ming",
@@ -2925,7 +3168,8 @@
   "apg": 2.0,
   "stars": 3,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 4
  },
  {
   "id": "brad-miller",
@@ -2937,7 +3181,8 @@
   "apg": 4.3,
   "stars": 1,
   "decade": 2000,
-  "prime": "2003–2006"
+  "prime": "2003–2006",
+  "rank": 5
  },
  {
   "id": "zydrunas-ilgauskas",
@@ -2949,7 +3194,8 @@
   "apg": 1.4,
   "stars": 1,
   "decade": 2000,
-  "prime": "2002–2005"
+  "prime": "2002–2005",
+  "rank": 6
  },
  {
   "id": "mehmet-okur",
@@ -2961,7 +3207,8 @@
   "apg": 2.1,
   "stars": 1,
   "decade": 2000,
-  "prime": "2005–2008"
+  "prime": "2005–2008",
+  "rank": 7
  },
  {
   "id": "ben-wallace",
@@ -2973,7 +3220,8 @@
   "apg": 1.7,
   "stars": 1,
   "decade": 2000,
-  "prime": "2002–2005"
+  "prime": "2002–2005",
+  "rank": 8
  },
  {
   "id": "antonio-davis",
@@ -2985,7 +3233,8 @@
   "apg": 1.6,
   "stars": 1,
   "decade": 2000,
-  "prime": "1999–2002"
+  "prime": "1999–2002",
+  "rank": 9
  },
  {
   "id": "emeka-okafor",
@@ -2997,7 +3246,8 @@
   "apg": 0.9,
   "stars": 1,
   "decade": 2000,
-  "prime": "2006–2009"
+  "prime": "2006–2009",
+  "rank": 10
  },
  {
   "id": "russell-westbrook",
@@ -3009,7 +3259,8 @@
   "apg": 10.5,
   "stars": 5,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 1
  },
  {
   "id": "kyrie-irving",
@@ -3021,7 +3272,8 @@
   "apg": 6.0,
   "stars": 4,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 2
  },
  {
   "id": "john-wall",
@@ -3033,7 +3285,8 @@
   "apg": 10.3,
   "stars": 3,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 3
  },
  {
   "id": "kyle-lowry",
@@ -3045,7 +3298,8 @@
   "apg": 6.7,
   "stars": 3,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 4
  },
  {
   "id": "kemba-walker",
@@ -3057,7 +3311,8 @@
   "apg": 5.7,
   "stars": 3,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 5
  },
  {
   "id": "deron-williams",
@@ -3069,7 +3324,8 @@
   "apg": 10.5,
   "stars": 3,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 6
  },
  {
   "id": "derrick-rose",
@@ -3081,7 +3337,8 @@
   "apg": 6.7,
   "stars": 3,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 7
  },
  {
   "id": "ben-simmons",
@@ -3093,7 +3350,8 @@
   "apg": 8.0,
   "stars": 3,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 8
  },
  {
   "id": "isaiah-thomas",
@@ -3105,7 +3363,8 @@
   "apg": 5.5,
   "stars": 3,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 9
  },
  {
   "id": "rajon-rondo",
@@ -3117,7 +3376,8 @@
   "apg": 9.7,
   "stars": 2,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 10
  },
  {
   "id": "james-harden",
@@ -3129,7 +3389,8 @@
   "apg": 7.9,
   "stars": 5,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 1
  },
  {
   "id": "dwyane-wade",
@@ -3141,7 +3402,8 @@
   "apg": 6.2,
   "stars": 5,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 2
  },
  {
   "id": "jimmy-butler",
@@ -3153,7 +3415,8 @@
   "apg": 5.1,
   "stars": 3,
   "decade": 2010,
-  "prime": "2015–2018"
+  "prime": "2015–2018",
+  "rank": 3
  },
  {
   "id": "klay-thompson",
@@ -3165,7 +3428,8 @@
   "apg": 2.4,
   "stars": 3,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 4
  },
  {
   "id": "jrue-holiday",
@@ -3177,7 +3441,8 @@
   "apg": 6.7,
   "stars": 3,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 5
  },
  {
   "id": "monta-ellis",
@@ -3189,7 +3454,8 @@
   "apg": 5.6,
   "stars": 2,
   "decade": 2010,
-  "prime": "2009–2012"
+  "prime": "2009–2012",
+  "rank": 6
  },
  {
   "id": "victor-oladipo",
@@ -3201,7 +3467,8 @@
   "apg": 3.6,
   "stars": 2,
   "decade": 2010,
-  "prime": "2015–2018"
+  "prime": "2015–2018",
+  "rank": 7
  },
  {
   "id": "lou-williams",
@@ -3213,7 +3480,8 @@
   "apg": 5.4,
   "stars": 2,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 8
  },
  {
   "id": "tyreke-evans",
@@ -3225,7 +3493,8 @@
   "apg": 5.3,
   "stars": 1,
   "decade": 2010,
-  "prime": "2009–2012"
+  "prime": "2009–2012",
+  "rank": 9
  },
  {
   "id": "nicolas-batum",
@@ -3237,7 +3506,8 @@
   "apg": 5.7,
   "stars": 1,
   "decade": 2010,
-  "prime": "2015–2018"
+  "prime": "2015–2018",
+  "rank": 10
  },
  {
   "id": "kevin-durant",
@@ -3249,7 +3519,8 @@
   "apg": 4.6,
   "stars": 5,
   "decade": 2010,
-  "prime": "2011–2014"
+  "prime": "2011–2014",
+  "rank": 1
  },
  {
   "id": "paul-george",
@@ -3261,7 +3532,8 @@
   "apg": 3.6,
   "stars": 4,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 2
  },
  {
   "id": "kawhi-leonard",
@@ -3273,7 +3545,8 @@
   "apg": 3.9,
   "stars": 4,
   "decade": 2010,
-  "prime": "2016–2020"
+  "prime": "2016–2020",
+  "rank": 3
  },
  {
   "id": "danny-granger",
@@ -3285,7 +3558,8 @@
   "apg": 2.7,
   "stars": 2,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 4
  },
  {
   "id": "gordon-hayward",
@@ -3297,7 +3571,8 @@
   "apg": 3.8,
   "stars": 2,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 5
  },
  {
   "id": "rudy-gay",
@@ -3309,7 +3584,8 @@
   "apg": 3.1,
   "stars": 2,
   "decade": 2010,
-  "prime": "2012–2015"
+  "prime": "2012–2015",
+  "rank": 6
  },
  {
   "id": "andrew-wiggins",
@@ -3321,7 +3597,8 @@
   "apg": 2.1,
   "stars": 1,
   "decade": 2010,
-  "prime": "2015–2018"
+  "prime": "2015–2018",
+  "rank": 7
  },
  {
   "id": "chandler-parsons",
@@ -3333,7 +3610,8 @@
   "apg": 3.3,
   "stars": 1,
   "decade": 2010,
-  "prime": "2012–2015"
+  "prime": "2012–2015",
+  "rank": 8
  },
  {
   "id": "evan-fournier",
@@ -3345,7 +3623,8 @@
   "apg": 3.3,
   "stars": 1,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 9
  },
  {
   "id": "t-j-warren",
@@ -3357,7 +3636,8 @@
   "apg": 1.4,
   "stars": 1,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 10
  },
  {
   "id": "kevin-love",
@@ -3369,7 +3649,8 @@
   "apg": 3.1,
   "stars": 4,
   "decade": 2010,
-  "prime": "2010–2014"
+  "prime": "2010–2014",
+  "rank": 1
  },
  {
   "id": "lamarcus-aldridge",
@@ -3381,7 +3662,8 @@
   "apg": 2.3,
   "stars": 3,
   "decade": 2010,
-  "prime": "2012–2015"
+  "prime": "2012–2015",
+  "rank": 2
  },
  {
   "id": "blake-griffin",
@@ -3393,7 +3675,8 @@
   "apg": 4.2,
   "stars": 3,
   "decade": 2010,
-  "prime": "2012–2015"
+  "prime": "2012–2015",
+  "rank": 3
  },
  {
   "id": "paul-millsap",
@@ -3405,7 +3688,8 @@
   "apg": 3.4,
   "stars": 2,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 4
  },
  {
   "id": "draymond-green",
@@ -3417,7 +3701,8 @@
   "apg": 7.2,
   "stars": 2,
   "decade": 2010,
-  "prime": "2015–2018"
+  "prime": "2015–2018",
+  "rank": 5
  },
  {
   "id": "josh-smith",
@@ -3429,7 +3714,8 @@
   "apg": 3.8,
   "stars": 2,
   "decade": 2010,
-  "prime": "2010–2013"
+  "prime": "2010–2013",
+  "rank": 6
  },
  {
   "id": "greg-monroe",
@@ -3441,7 +3727,8 @@
   "apg": 2.6,
   "stars": 1,
   "decade": 2010,
-  "prime": "2012–2015"
+  "prime": "2012–2015",
+  "rank": 7
  },
  {
   "id": "luis-scola",
@@ -3453,7 +3740,8 @@
   "apg": 2.2,
   "stars": 1,
   "decade": 2010,
-  "prime": "2009–2012"
+  "prime": "2009–2012",
+  "rank": 8
  },
  {
   "id": "harrison-barnes",
@@ -3465,7 +3753,8 @@
   "apg": 1.7,
   "stars": 1,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 9
  },
  {
   "id": "andrea-bargnani",
@@ -3477,7 +3766,8 @@
   "apg": 1.4,
   "stars": 1,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 10
  },
  {
   "id": "anthony-davis",
@@ -3489,7 +3779,8 @@
   "apg": 2.7,
   "stars": 4,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 1
  },
  {
   "id": "karl-anthony-towns",
@@ -3501,7 +3792,8 @@
   "apg": 2.8,
   "stars": 4,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 2
  },
  {
   "id": "dwight-howard",
@@ -3513,7 +3805,8 @@
   "apg": 1.5,
   "stars": 4,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 3
  },
  {
   "id": "demarcus-cousins",
@@ -3525,7 +3818,8 @@
   "apg": 3.9,
   "stars": 4,
   "decade": 2010,
-  "prime": "2014–2017"
+  "prime": "2014–2017",
+  "rank": 4
  },
  {
   "id": "pau-gasol",
@@ -3537,7 +3831,8 @@
   "apg": 3.4,
   "stars": 3,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 5
  },
  {
   "id": "al-horford",
@@ -3549,7 +3844,8 @@
   "apg": 3.0,
   "stars": 2,
   "decade": 2010,
-  "prime": "2009–2013"
+  "prime": "2009–2013",
+  "rank": 6
  },
  {
   "id": "andre-drummond",
@@ -3561,7 +3857,8 @@
   "apg": 2.3,
   "stars": 2,
   "decade": 2010,
-  "prime": "2017–2020"
+  "prime": "2017–2020",
+  "rank": 7
  },
  {
   "id": "david-lee",
@@ -3573,7 +3870,8 @@
   "apg": 3.0,
   "stars": 2,
   "decade": 2010,
-  "prime": "2008–2011"
+  "prime": "2008–2011",
+  "rank": 8
  },
  {
   "id": "marc-gasol",
@@ -3585,7 +3883,8 @@
   "apg": 4.4,
   "stars": 2,
   "decade": 2010,
-  "prime": "2016–2019"
+  "prime": "2016–2019",
+  "rank": 9
  },
  {
   "id": "al-jefferson",
@@ -3597,7 +3896,8 @@
   "apg": 2.1,
   "stars": 2,
   "decade": 2010,
-  "prime": "2011–2014"
+  "prime": "2011–2014",
+  "rank": 10
  },
  {
   "id": "luka-doncic",
@@ -3609,7 +3909,8 @@
   "apg": 8.9,
   "stars": 5,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 1
  },
  {
   "id": "stephen-curry",
@@ -3621,7 +3922,8 @@
   "apg": 5.8,
   "stars": 5,
   "decade": 2020,
-  "prime": "2018–2022"
+  "prime": "2018–2022",
+  "rank": 2
  },
  {
   "id": "damian-lillard",
@@ -3633,7 +3935,8 @@
   "apg": 7.4,
   "stars": 4,
   "decade": 2020,
-  "prime": "2018–2021"
+  "prime": "2018–2021",
+  "rank": 3
  },
  {
   "id": "shai-gilgeous-alexander",
@@ -3645,7 +3948,8 @@
   "apg": 6.4,
   "stars": 4,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 4
  },
  {
   "id": "trae-young",
@@ -3657,7 +3961,8 @@
   "apg": 9.5,
   "stars": 4,
   "decade": 2020,
-  "prime": "2019–2022"
+  "prime": "2019–2022",
+  "rank": 5
  },
  {
   "id": "jalen-brunson",
@@ -3669,7 +3974,8 @@
   "apg": 6.9,
   "stars": 3,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 6
  },
  {
   "id": "cade-cunningham",
@@ -3681,7 +3987,8 @@
   "apg": 8.9,
   "stars": 3,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 7
  },
  {
   "id": "de-aaron-fox",
@@ -3693,7 +4000,8 @@
   "apg": 6.0,
   "stars": 3,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 8
  },
  {
   "id": "tyrese-maxey",
@@ -3705,7 +4013,8 @@
   "apg": 6.3,
   "stars": 3,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 9
  },
  {
   "id": "ja-morant",
@@ -3717,7 +4026,8 @@
   "apg": 7.4,
   "stars": 3,
   "decade": 2020,
-  "prime": "2020–2023"
+  "prime": "2020–2023",
+  "rank": 10
  },
  {
   "id": "donovan-mitchell",
@@ -3729,7 +4039,8 @@
   "apg": 5.2,
   "stars": 4,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 1
  },
  {
   "id": "devin-booker",
@@ -3741,7 +4052,8 @@
   "apg": 6.7,
   "stars": 4,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 2
  },
  {
   "id": "anthony-edwards",
@@ -3753,7 +4065,8 @@
   "apg": 4.5,
   "stars": 3,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 3
  },
  {
   "id": "bradley-beal",
@@ -3765,7 +4078,8 @@
   "apg": 5.3,
   "stars": 3,
   "decade": 2020,
-  "prime": "2018–2021"
+  "prime": "2018–2021",
+  "rank": 4
  },
  {
   "id": "zach-lavine",
@@ -3777,7 +4091,8 @@
   "apg": 4.5,
   "stars": 3,
   "decade": 2020,
-  "prime": "2020–2023"
+  "prime": "2020–2023",
+  "rank": 5
  },
  {
   "id": "dejounte-murray",
@@ -3789,7 +4104,8 @@
   "apg": 7.2,
   "stars": 2,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 6
  },
  {
   "id": "tyler-herro",
@@ -3801,7 +4117,8 @@
   "apg": 4.8,
   "stars": 2,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 7
  },
  {
   "id": "jalen-green",
@@ -3813,7 +4130,8 @@
   "apg": 3.5,
   "stars": 1,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 8
  },
  {
   "id": "terry-rozier",
@@ -3825,7 +4143,8 @@
   "apg": 4.6,
   "stars": 1,
   "decade": 2020,
-  "prime": "2020–2023"
+  "prime": "2020–2023",
+  "rank": 9
  },
  {
   "id": "jalen-williams",
@@ -3837,7 +4156,8 @@
   "apg": 4.3,
   "stars": 1,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 10
  },
  {
   "id": "demar-derozan",
@@ -3849,7 +4169,8 @@
   "apg": 5.1,
   "stars": 4,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 1
  },
  {
   "id": "jaylen-brown",
@@ -3861,7 +4182,8 @@
   "apg": 4.4,
   "stars": 3,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 2
  },
  {
   "id": "khris-middleton",
@@ -3873,7 +4195,8 @@
   "apg": 5.1,
   "stars": 2,
   "decade": 2020,
-  "prime": "2019–2022"
+  "prime": "2019–2022",
+  "rank": 3
  },
  {
   "id": "brandon-ingram",
@@ -3885,7 +4208,8 @@
   "apg": 4.9,
   "stars": 2,
   "decade": 2020,
-  "prime": "2019–2022"
+  "prime": "2019–2022",
+  "rank": 4
  },
  {
   "id": "deni-avdija",
@@ -3897,7 +4221,8 @@
   "apg": 4.7,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 5
  },
  {
   "id": "franz-wagner",
@@ -3909,7 +4234,8 @@
   "apg": 3.9,
   "stars": 1,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 6
  },
  {
   "id": "jalen-johnson",
@@ -3921,7 +4247,8 @@
   "apg": 5.8,
   "stars": 1,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 7
  },
  {
   "id": "mikal-bridges",
@@ -3933,7 +4260,8 @@
   "apg": 3.5,
   "stars": 1,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 8
  },
  {
   "id": "michael-porter-jr",
@@ -3945,7 +4273,8 @@
   "apg": 2.1,
   "stars": 1,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 9
  },
  {
   "id": "keldon-johnson",
@@ -3957,7 +4286,8 @@
   "apg": 2.6,
   "stars": 1,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 10
  },
  {
   "id": "giannis-antetokounmpo",
@@ -3969,7 +4299,8 @@
   "apg": 6.3,
   "stars": 5,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 1
  },
  {
   "id": "jayson-tatum",
@@ -3981,7 +4312,8 @@
   "apg": 5.2,
   "stars": 4,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 2
  },
  {
   "id": "julius-randle",
@@ -3993,7 +4325,8 @@
   "apg": 5.0,
   "stars": 3,
   "decade": 2020,
-  "prime": "2020–2023"
+  "prime": "2020–2023",
+  "rank": 3
  },
  {
   "id": "pascal-siakam",
@@ -4005,7 +4338,8 @@
   "apg": 5.1,
   "stars": 3,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 4
  },
  {
   "id": "scottie-barnes",
@@ -4017,7 +4351,8 @@
   "apg": 5.9,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 5
  },
  {
   "id": "paolo-banchero",
@@ -4029,7 +4364,8 @@
   "apg": 5.2,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 6
  },
  {
   "id": "zion-williamson",
@@ -4041,7 +4377,8 @@
   "apg": 4.4,
   "stars": 2,
   "decade": 2020,
-  "prime": "2020–2024"
+  "prime": "2020–2024",
+  "rank": 7
  },
  {
   "id": "miles-bridges",
@@ -4053,7 +4390,8 @@
   "apg": 3.7,
   "stars": 2,
   "decade": 2020,
-  "prime": "2021–2025"
+  "prime": "2021–2025",
+  "rank": 8
  },
  {
   "id": "kyle-kuzma",
@@ -4065,7 +4403,8 @@
   "apg": 3.8,
   "stars": 2,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 9
  },
  {
   "id": "lauri-markkanen",
@@ -4077,7 +4416,8 @@
   "apg": 1.7,
   "stars": 1,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 10
  },
  {
   "id": "nikola-jokic",
@@ -4089,7 +4429,8 @@
   "apg": 9.9,
   "stars": 5,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 1
  },
  {
   "id": "joel-embiid",
@@ -4101,7 +4442,8 @@
   "apg": 3.8,
   "stars": 4,
   "decade": 2020,
-  "prime": "2020–2023"
+  "prime": "2020–2023",
+  "rank": 2
  },
  {
   "id": "domantas-sabonis",
@@ -4113,7 +4455,8 @@
   "apg": 7.2,
   "stars": 3,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 3
  },
  {
   "id": "nikola-vucevic",
@@ -4125,7 +4468,8 @@
   "apg": 3.7,
   "stars": 3,
   "decade": 2020,
-  "prime": "2018–2021"
+  "prime": "2018–2021",
+  "rank": 4
  },
  {
   "id": "alperen-sengun",
@@ -4137,7 +4481,8 @@
   "apg": 5.4,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 5
  },
  {
   "id": "bam-adebayo",
@@ -4149,7 +4494,8 @@
   "apg": 3.8,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 6
  },
  {
   "id": "victor-wembanyama",
@@ -4161,7 +4507,8 @@
   "apg": 3.6,
   "stars": 2,
   "decade": 2020,
-  "prime": "2023–2026"
+  "prime": "2023–2026",
+  "rank": 7
  },
  {
   "id": "rudy-gobert",
@@ -4173,7 +4520,8 @@
   "apg": 1.3,
   "stars": 2,
   "decade": 2020,
-  "prime": "2019–2022"
+  "prime": "2019–2022",
+  "rank": 8
  },
  {
   "id": "jaren-jackson-jr",
@@ -4185,7 +4533,8 @@
   "apg": 1.8,
   "stars": 2,
   "decade": 2020,
-  "prime": "2022–2025"
+  "prime": "2022–2025",
+  "rank": 9
  },
  {
   "id": "kristaps-porzingis",
@@ -4197,6 +4546,7 @@
   "apg": 2.4,
   "stars": 1,
   "decade": 2020,
-  "prime": "2021–2024"
+  "prime": "2021–2024",
+  "rank": 10
  }
 ]

@@ -79,6 +79,11 @@ SIM_LABELS = {
     "stats": "stats only",
     "ai": "AI + stats",
 }
+POOL_LABELS = {
+    "legends": "legends only",
+    "household": "household names",
+    "deep": "deep (stars + role players)",
+}
 SHARE_PROMPT_HEADER = (
     "🎟️ Draft complete — paste this into your favorite LLM to run the tournament:"
 )
@@ -255,8 +260,9 @@ def lobby_embed(state: DraftState) -> discord.Embed:
         value=(
             f"Budget **${cfg.budget}** · clock **{cfg.lot_seconds}s flat** "
             "(a bid in the last 10s adds 5s) · Eras: "
-            f"**{era_label(cfg.era_start, cfg.era_end)}** · tournament sim "
-            f"**{SIM_LABELS.get(cfg.sim, cfg.sim)}**"
+            f"**{era_label(cfg.era_start, cfg.era_end)}** · pool "
+            f"**{POOL_LABELS.get(cfg.pool_depth, cfg.pool_depth)}** · "
+            f"tournament sim **{SIM_LABELS.get(cfg.sim, cfg.sim)}**"
         ),
         inline=False,
     )

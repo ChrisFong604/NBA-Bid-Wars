@@ -56,13 +56,18 @@ def test_old_style_config_snapshot_loads(tmp_path):
     lot_seconds, and store ``sim`` as a bool. The loader must drop the dead
     keys, default lot_seconds, and coerce sim True->"ai" / False->"off".
     Pre-lineup-phase snapshots also omit lineup_seconds/lineup_deadline —
-    defaults must fill both."""
+    defaults must fill both. Pre-pool-depth snapshots omit
+    ``config.pool_depth`` and ``rank`` on every serialized player — the
+    Config/Player defaults ("deep" / 10) must fill both."""
     state = rich_state()
     payload = {"state": state_to_dict(state), "meta": {"thread_id": 3}}
     cfg = payload["state"]["config"]
     del cfg["lot_seconds"]
     del cfg["lineup_seconds"]
+    del cfg["pool_depth"]
     del payload["state"]["lineup_deadline"]
+    for row in payload["state"]["queue"]:
+        del row["rank"]  # pre-rank players (helpers default rank is 10)
     cfg.update(open_seconds=20, hammer_seconds=10, pool_extra=10, sim=True)
     path = tmp_path / "old.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -71,8 +76,10 @@ def test_old_style_config_snapshot_loads(tmp_path):
     assert loaded.config.lot_seconds == 30  # default fills the missing key
     assert loaded.config.lineup_seconds == 60  # default fills the missing key
     assert loaded.lineup_deadline == 0.0  # default fills the missing key
+    assert loaded.config.pool_depth == "deep"  # default fills the missing key
     assert loaded.config.sim == "ai"  # True -> "ai"
     assert not hasattr(loaded.config, "pool_extra")
+    assert all(p.rank == 10 for p in loaded.queue)  # Player default fills rank
     # everything else survives untouched (sim True coerces to "ai", which
     # differs from the fresh-Config default of "prompt")
     expected = dataclasses.replace(

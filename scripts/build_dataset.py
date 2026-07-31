@@ -26,6 +26,8 @@ Methodology (fully deterministic — no randomness, all ties broken by
   All-Star selection).
 * **Stars are era-relative:** within each decade's 50, caliber ranks 1-4 get
   5 stars, 5-12 get 4, 13-25 get 3, 26-40 get 2, 41-50 get 1.
+* Each player's 1-based caliber order within his decade x position bucket is
+  persisted as ``rank`` (1-10) — it powers ``Config.pool_depth`` filtering.
 
 Run ``uv run python scripts/build_dataset.py`` to rewrite the JSON and print
 a per-decade composition report. Stdlib only.
@@ -236,10 +238,12 @@ def to_rows(selected: list[dict]) -> list[dict]:
         ),
     )
     used: Counter[str] = Counter()
+    bucket_rank: Counter[tuple[int, str]] = Counter()  # 1-based caliber rank
     rows = []
     for cand in ordered:
         slug = slugify(cand["n"])
         used[slug] += 1
+        bucket_rank[(cand["decade"], cand["pos"])] += 1
         rows.append(
             {
                 "id": slug if used[slug] == 1 else f"{slug}-{used[slug]}",
@@ -252,6 +256,7 @@ def to_rows(selected: list[dict]) -> list[dict]:
                 "stars": cand["stars"],
                 "decade": cand["decade"],
                 "prime": cand["prime"],
+                "rank": bucket_rank[(cand["decade"], cand["pos"])],
             }
         )
     return rows
