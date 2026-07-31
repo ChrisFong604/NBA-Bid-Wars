@@ -1,8 +1,9 @@
-"""Web app backend tests: rooms API, redaction, timers, and a full
-WebSocket-driven draft. Timers ACTUALLY fire: rooms are built directly
-through the RoomRegistry with sub-second clocks, and the asyncio timer
-tasks (running on the TestClient's portal event loop) drive lot expiry,
-free-pick, and lineup transitions for real."""
+"""Web app backend tests: rooms API, redaction, timers, draft modes
+(blind masking, snake turns), and full WebSocket-driven drafts. Timers
+ACTUALLY fire: rooms are built directly through the RoomRegistry with
+sub-second clocks, and the asyncio timer tasks (running on the
+TestClient's portal event loop) drive lot expiry, free-pick, snake-turn,
+and lineup transitions for real."""
 from __future__ import annotations
 
 import json
@@ -11,9 +12,13 @@ from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from draftbot.models import (
     Config,
+    DraftState,
+    ForceAssignedFx,
+    LogEntry,
     Lot,
     Lottery,
     LotteryCancelledFx,
@@ -21,6 +26,11 @@ from draftbot.models import (
     LotteryJoinedFx,
     LotteryOpenedFx,
     LotteryRevealFx,
+    PassedFx,
+    PickedFx,
+    SnakeTurnFx,
+    SoldFx,
+    snake_price,
 )
 from helpers import auction_state, make_manager, make_players
 from webapp import views
@@ -105,6 +115,7 @@ def test_create_room_validation(client):
         {"name": "A", "era_from": 2020, "era_to": 1960},  # backwards
         {"name": "A", "sim": "vibes"},
         {"name": "A", "pool_depth": "shallow"},
+        {"name": "A", "mode": "dynasty"},
     ]
     for body in bad_bodies:
         assert client.post("/api/rooms", json=body).status_code == 400, body
@@ -119,6 +130,18 @@ def test_create_room_pool_depth_roundtrips_into_config(client):
     # omitted -> the "legends" default
     resp = client.post("/api/rooms", json={"name": "Bob"})
     assert registry.get(resp.json()["room"]).state.config.pool_depth == "legends"
+
+
+def test_create_room_mode_roundtrips_into_config(client):
+    for mode in ("auction", "blind", "snake"):
+        resp = client.post("/api/rooms", json={"name": "Alice", "mode": mode})
+        assert resp.status_code == 200, mode
+        room = registry.get(resp.json()["room"])
+        assert room.state.config.mode == mode
+        assert views.state_view(room.state, None)["config"]["mode"] == mode
+    # omitted -> the "auction" default
+    resp = client.post("/api/rooms", json={"name": "Bob"})
+    assert registry.get(resp.json()["room"]).state.config.mode == "auction"
 
 
 def test_join_and_full_lobby(client):
@@ -156,7 +179,64 @@ def test_room_eviction():
     assert reg.get(fresh.code) is fresh
 
 
+def test_sweep_spares_paused_live_draft():
+    reg = RoomRegistry()
+    room, _, _ = reg.create_room(Config(), "Alice")
+    room.state = replace(room.state, phase="auction", paused=True)
+    # Paused rooms stop refreshing last_active — that must not read as idle.
+    room.last_active = time.time() - 3700
+    reg.create_room(Config(), "Bob")  # create sweeps
+    assert reg.get(room.code) is room
+
+
+def test_sweep_spares_paused_live_snake_draft():
+    reg = RoomRegistry()
+    room, _, _ = reg.create_room(Config(mode="snake"), "Alice")
+    room.state = replace(room.state, phase="snake", paused=True)
+    room.last_active = time.time() - 3700
+    reg.create_room(Config(), "Bob")  # create sweeps
+    assert reg.get(room.code) is room
+
+
+def test_sweep_spares_live_draft_with_open_sockets(client):
+    room, token, _ = registry.create_room(Config(), "Alice")
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as ws:
+        assert ws.receive_json()["type"] == "state"
+        room.state = replace(room.state, phase="auction")
+        room.last_active = time.time() - 3700
+        client.post("/api/rooms", json={"name": "Bob"})  # create sweeps
+        assert registry.get(room.code) is room
+
+
+def test_sweep_closes_sockets_of_evicted_room(client):
+    # A dead lobby with a socket still attached IS evicted — but the
+    # socket must be told and closed, never left playing a ghost room.
+    room, token, _ = registry.create_room(Config(), "Alice")
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as ws:
+        assert ws.receive_json()["type"] == "state"
+        room.last_active = time.time() - 3700
+        client.post("/api/rooms", json={"name": "Bob"})  # create sweeps
+        assert registry.get(room.code) is None
+        msg = ws.receive_json()
+        assert msg["type"] == "error"
+        assert "expired" in msg["message"]
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_json()
+
+
 # ------------------------------------------------------- websocket basics
+
+
+def test_state_messages_carry_server_now(client):
+    room, token, _ = registry.create_room(Config(), "Alice")
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as ws:
+        hello = ws.receive_json()
+        assert hello["type"] == "state"
+        assert hello["now"] == pytest.approx(time.time(), abs=5.0)
+        # Broadcast states carry it too — a join triggers a commit.
+        client.post(f"/api/rooms/{room.code}/join", json={"name": "Bob"})
+        msg = _recv_until(ws, lambda m: m.get("type") == "state")
+        assert msg["now"] == pytest.approx(time.time(), abs=5.0)
 
 
 def test_ws_unknown_room(client):
@@ -177,6 +257,12 @@ def test_ws_malformed_and_unknown_actions(client):
         ws.send_json({"action": "explode"})
         assert ws.receive_json()["type"] == "error"
         ws.send_json({"action": "bid", "increment": "lots"})
+        assert ws.receive_json()["type"] == "error"
+        # bool is an int subclass — JSON true must never become a $1 bid
+        # (it used to commit current_bid=True into state).
+        ws.send_json({"action": "bid", "amount": True})
+        assert ws.receive_json()["type"] == "error"
+        ws.send_json({"action": "bid", "increment": False})
         assert ws.receive_json()["type"] == "error"
         ws.send_json({"action": "guess", "number": "seven"})  # malformed
         assert ws.receive_json()["type"] == "error"
@@ -856,7 +942,14 @@ def test_simulate_endpoint_gates(client):
         client.post(f"/api/rooms/{room.code}/simulate", json={"token": "nope"})
         .status_code
         == 403
-    )  # member-only
+    )  # unknown token
+
+    room.tokens["member-token"] = 2  # manager 2: member, not commissioner
+    resp = client.post(
+        f"/api/rooms/{room.code}/simulate", json={"token": "member-token"}
+    )
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Only the commissioner can simulate."
 
     off_room, off_token = _completed_room("off")
     assert (
@@ -892,3 +985,432 @@ def test_simulate_ai_falls_back_to_stats_without_key(client, monkeypatch):
         assert msg["note"] == "no LLM key — stats-only ranking"
         assert msg["champion"] in ("M1", "M2")
         assert len(msg["standings"]) == 2
+
+
+# ------------------------------------------------------- draft modes: views
+
+
+def test_snake_state_view_pool_turn_and_prices():
+    cfg = Config(mode="snake")
+    queue = tuple(
+        replace(p, stars=s) for p, s in zip(make_players()[:4], (5, 3, 1, 4))
+    )
+    state = DraftState(
+        config=cfg,
+        commissioner_id=1,
+        phase="snake",
+        managers=(
+            make_manager(1, cfg, budget=15),
+            make_manager(2, cfg, budget=15),
+        ),
+        queue=queue,
+        pick_deadline=1500.0,
+    )
+    view = views.state_view(state, 1)
+    assert view["config"]["mode"] == "snake"
+    # the open pool: full player cards plus the tier sticker price
+    assert [p["price"] for p in view["pool"]] == [5, 3, 1, 4]
+    assert all(p["name"] and p["id"] for p in view["pool"])
+    assert view["turn"] == {"manager": 1, "deadline": 1500.0}
+    assert view["lot"] is None and view["free_pick"] is None
+    # price is the tier's one public face — "stars" itself never serializes
+    assert '"stars"' not in json.dumps(view)
+    # snaking order: with 2 picks made round 1 starts back at manager 2
+    snaked = replace(
+        state,
+        managers=(
+            make_manager(1, cfg, budget=10, filled=1),
+            make_manager(2, cfg, budget=10, filled=1),
+        ),
+    )
+    assert views.state_view(snaked, 1)["turn"]["manager"] == 2
+
+
+def test_pool_and_turn_null_outside_snake_phase():
+    view = views.state_view(DraftState(config=Config(), commissioner_id=1), 1)
+    assert view["pool"] is None and view["turn"] is None
+    assert view["config"]["mode"] == "auction"
+
+
+def test_snake_turn_fx_translation():
+    assert views.fx_view(SnakeTurnFx(-2, 1234.5)) == {
+        "kind": "snake_turn",
+        "manager": -2,
+        "deadline": 1234.5,
+    }
+
+
+def test_blind_views_mask_exactly_the_dictated_spots():
+    cfg = Config(mode="blind")
+    p = make_players()[0]
+    state = auction_state(
+        cfg,
+        (make_manager(1, cfg, filled=1), make_manager(2, cfg)),
+        queue=make_players()[1:3],
+        lot=Lot(seq=1, player=p, last_call=False, deadline=2000.0),
+        log=(LogEntry("passed", p, None, 0), LogEntry("sold", p, 1, 3)),
+    )
+    view = views.state_view(state, 1)
+    # (a) the live lot: stat card intact, identity FULLY null — dataset ids
+    # are name slugs, so a real id would un-mask the card.
+    assert view["lot"]["player"]["name"] is None
+    assert view["lot"]["player"]["id"] is None
+    assert view["lot"]["player"]["ppg"] == p.ppg
+    # rostered spots always name their players for real
+    mine = next(m for m in view["managers"] if m["id"] == 1)
+    assert mine["spots"][0]["player"]["name"] == "Own 1-0"
+    # (c) only the "passed" log entry is masked
+    assert [e["player"] for e in view["log"]] == [None, p.name]
+    # (b) the free-pick pool is a masked menu: ids and stats, no names
+    fp_state = DraftState(
+        config=cfg,
+        commissioner_id=1,
+        phase="free_pick",
+        managers=(make_manager(1, cfg),),
+        queue=make_players()[:3],
+        pick_deadline=2000.0,
+    )
+    fp_pool = views.state_view(fp_state, 1, blind_salt="s3cret")["free_pick"]["pool"]
+    real_ids = {x.id for x in make_players()[:3]}
+    assert all(x["name"] is None and x["id"] for x in fp_pool)
+    # ids are salted aliases: clickable, distinct, and never the name slug
+    assert all(x["id"] not in real_ids for x in fp_pool)
+    assert len({x["id"] for x in fp_pool}) == 3
+    assert fp_pool[0]["id"] == views.blind_alias("s3cret", make_players()[0].id)
+    # (d) fx: "passed" masked in blind only; rostering fx always real
+    passed_view = views.fx_view(PassedFx(p), "blind")["player"]
+    assert passed_view["name"] is None and passed_view["id"] is None
+    assert views.fx_view(PassedFx(p))["player"]["name"] == p.name
+    assert views.fx_view(SoldFx(p, 1, 3), "blind")["player"]["name"] == p.name
+    assert (
+        views.fx_view(ForceAssignedFx(p, 1), "blind")["player"]["name"]
+        == p.name
+    )
+    assert views.fx_view(PickedFx(p, 1), "blind")["player"]["name"] == p.name
+
+
+# ------------------------------------------------------ snake mode over WS
+
+
+def _cheapest_feasible(s, uid):
+    """The engine's feasibility rule read off the wire: affordable AND
+    leaves $1 for every other still-empty slot."""
+    mgr = next(m for m in s["managers"] if m["id"] == uid)
+    empties = sum(1 for sp in mgr["spots"] if sp["player"] is None)
+    feasible = [
+        p
+        for p in s["pool"]
+        if p["price"] <= mgr["budget"]
+        and mgr["budget"] - p["price"] >= empties - 1
+    ]
+    assert feasible  # the engine only stops the clock on feasible turns
+    return min(feasible, key=lambda p: (p["price"], p["id"]))
+
+
+def test_snake_draft_over_websockets(client):
+    """A snake room created through the API and played to completion over
+    real sockets: open priced pool, snaking turn order, private wrong-turn
+    rejections, addtime on the snake clock, sticker-price charges, and the
+    prompt-mode sim + /simulate at the end."""
+    body = client.post(
+        "/api/rooms",
+        json={"name": "Alice", "mode": "snake", "lineup": 0, "sim": "prompt"},
+    ).json()
+    room = registry.get(body["room"])
+    token_a, uid_a = body["token"], body["user_id"]
+    joined = client.post(
+        f"/api/rooms/{body['room']}/join", json={"name": "Bob"}
+    ).json()
+    token_b, uid_b = joined["token"], joined["user_id"]
+
+    seen_a: list[dict] = []
+    with client.websocket_connect(f"/ws/{body['room']}?token={token_a}") as ws_a, \
+            client.websocket_connect(f"/ws/{body['room']}?token={token_b}") as ws_b:
+        seen_a.append(ws_a.receive_json())
+        ws_b.receive_json()
+        ws_a.send_json({"action": "start"})
+        st = _recv_until(ws_a, lambda m: _is_phase(m, "snake"), seen_a)
+        st_b = _recv_until(ws_b, lambda m: _is_phase(m, "snake"))
+        s = _state(st)
+        assert s["config"]["mode"] == "snake"
+        assert all(m["budget"] == 15 for m in s["managers"])  # SNAKE_BUDGET
+        assert s["lot"] is None and s["free_pick"] is None
+        assert s["queue_count"] == 10 == len(s["pool"])
+        # the pool is open to every socket, priced at the REAL star tiers
+        assert {p["id"]: p["price"] for p in s["pool"]} == {
+            p.id: snake_price(p) for p in room.state.queue
+        }
+        assert all(p["name"] and 1 <= p["price"] <= 5 for p in s["pool"])
+        assert _state(st_b)["pool"] == s["pool"]
+        # first turn: managers order, commissioner first — announced by fx
+        assert s["turn"]["manager"] == uid_a
+        turn_fx = _fx(
+            _recv_until(ws_a, lambda m: "snake_turn" in _fx_kinds(m), seen_a),
+            "snake_turn",
+        )
+        assert turn_fx["manager"] == uid_a
+        assert turn_fx["deadline"] == s["turn"]["deadline"]
+
+        # wrong-turn pick: rejected privately (Alice's stream is scanned
+        # for error frames at the end of the test)
+        ws_b.send_json({"action": "pick", "player_id": s["pool"][0]["id"]})
+        err = _recv_until(ws_b, lambda m: m.get("type") == "error")
+        assert err["message"] == "It's not your pick."
+
+        # addtime extends the live snake clock
+        before = s["turn"]["deadline"]
+        ws_a.send_json({"action": "addtime", "seconds": 60})
+        st = _recv_until(
+            ws_a,
+            lambda m: _is_phase(m, "snake")
+            and _state(m)["turn"]["deadline"] > before + 30,
+            seen_a,
+        )
+        assert _state(st)["turn"]["deadline"] == pytest.approx(before + 60)
+
+        # Alice picks the cheapest feasible player at its sticker price...
+        choice = _cheapest_feasible(_state(st), uid_a)
+        ws_a.send_json({"action": "pick", "player_id": choice["id"]})
+        st = _recv_until(
+            ws_a,
+            lambda m: m.get("type") == "state"
+            and len(_state(m).get("pool") or ()) == 9,
+            seen_a,
+        )
+        s = _state(st)
+        mine = next(m for m in s["managers"] if m["id"] == uid_a)
+        assert mine["budget"] == 15 - choice["price"]
+        assert any(
+            sp["player"]
+            and sp["player"]["id"] == choice["id"]
+            and sp["price"] == choice["price"]
+            for sp in mine["spots"]
+        )
+        # ...and the turn snakes to Bob
+        assert s["turn"]["manager"] == uid_b
+
+        # drive it home: whoever is on the clock picks; infeasible turns
+        # (engine-forced bargains) resolve inside the same commit
+        for _ in range(12):
+            if s["phase"] != "snake":
+                break
+            uid = s["turn"]["manager"]
+            choice = _cheapest_feasible(s, uid)
+            ws = ws_a if uid == uid_a else ws_b
+            ws.send_json({"action": "pick", "player_id": choice["id"]})
+            st = _recv_until(
+                ws_a,
+                lambda m, n=len(s["pool"]): m.get("type") == "state"
+                and (
+                    _state(m)["phase"] != "snake"
+                    or len(_state(m)["pool"]) < n
+                ),
+                seen_a,
+            )
+            s = _state(st)
+        assert s["phase"] == "complete"  # lineup window 0 → straight there
+        assert all(sp["player"] for m in s["managers"] for sp in m["spots"])
+        for m in s["managers"]:
+            assert m["budget"] == 15 - sum(sp["price"] for sp in m["spots"])
+        assert all(e["kind"] in ("pick", "force") for e in s["log"])
+        assert all(e["player"] for e in s["log"])  # snake never masks names
+
+        # completion flows: the sim prompt arrives, /simulate re-runs it
+        sim_msg = _recv_until(ws_a, lambda m: m.get("type") == "sim", seen_a)
+        assert sim_msg["mode"] == "prompt"
+        resp = client.post(
+            f"/api/rooms/{body['room']}/simulate", json={"token": token_a}
+        )
+        assert resp.status_code == 200
+        _recv_until(ws_a, lambda m: m.get("type") == "sim", seen_a)
+
+    dump = json.dumps(seen_a)
+    assert '"stars"' not in dump and '"queue"' not in dump
+    # Bob's wrong-turn rejection stayed private — Alice saw zero errors
+    assert all(m.get("type") != "error" for m in seen_a)
+
+
+def test_snake_with_cpu_forced_flows_complete(client):
+    """Alice + a CPU in snake mode. The CPU brain sits idle during snake,
+    so every CPU turn is resolved by the engine's turn-timer autopick —
+    the forced flow — while Alice picks on her own turns. The draft must
+    complete with full rosters either way."""
+    cfg = Config(
+        mode="snake", lot_seconds=0.8, lineup_seconds=0, sim="off", afk_lots=99
+    )
+    room, token, _ = registry.create_room(cfg, "Alice")
+    seen: list[dict] = []
+    with client.websocket_connect(f"/ws/{room.code}?token={token}") as ws:
+        seen.append(ws.receive_json())
+        ws.send_json({"action": "add_cpu"})
+        _recv_until(
+            ws,
+            lambda m: m.get("type") == "state"
+            and len(_state(m)["managers"]) == 2,
+            seen,
+        )
+        ws.send_json({"action": "start"})
+        st = _recv_until(ws, lambda m: _is_phase(m, "snake"), seen)
+        s = _state(st)
+        for _ in range(30):
+            if s["phase"] != "snake":
+                break
+            if s["turn"]["manager"] == 1:
+                choice = _cheapest_feasible(s, 1)
+                ws.send_json({"action": "pick", "player_id": choice["id"]})
+            # CPU on the clock: its turn autopicks when the snake timer
+            # fires — either way, wait for the next resolving commit
+            st = _recv_until(
+                ws,
+                lambda m, n=len(s["pool"]): m.get("type") == "state"
+                and (
+                    _state(m)["phase"] != "snake"
+                    or len(_state(m)["pool"]) < n
+                ),
+                seen,
+            )
+            s = _state(st)
+        assert s["phase"] == "complete"
+
+    # the CPU's turns were announced and resolved without a human
+    assert any(
+        f.get("kind") == "snake_turn" and f.get("manager") == -1
+        for m in seen
+        for f in m.get("fx", [])
+    )
+    final = _state(_recv_last_state(seen))
+    assert all(sp["player"] for m in final["managers"] for sp in m["spots"])
+    assert all(e["kind"] in ("pick", "force") for e in final["log"])
+    assert any(e["manager"] == -1 for e in final["log"])
+    assert '"stars"' not in json.dumps(seen)
+
+
+# ------------------------------------------------------ blind mode over WS
+
+
+def test_blind_draft_masks_names_until_rostered(client):
+    """Blind mode over real sockets: the live lot rides the wire nameless,
+    the sale is the reveal, passes stay masked forever (fx + log), the
+    free-pick pool is a masked menu — while rostered names, autofill, the
+    sim prompt, and /simulate stay fully real."""
+    cfg = Config(mode="blind", lot_seconds=0.4, lineup_seconds=0, afk_lots=99,
+                 sim="prompt", snipe_window=0.05, snipe_extend=0.1)
+    room, token_a, uid_a = registry.create_room(cfg, "Alice")
+    joined = client.post(
+        f"/api/rooms/{room.code}/join", json={"name": "Bob"}
+    ).json()
+    token_b, uid_b = joined["token"], joined["user_id"]
+
+    seen_a: list[dict] = []
+    with client.websocket_connect(f"/ws/{room.code}?token={token_a}") as ws_a, \
+            client.websocket_connect(f"/ws/{room.code}?token={token_b}") as ws_b:
+        seen_a.append(ws_a.receive_json())
+        ws_b.receive_json()
+        ws_a.send_json({"action": "start"})
+        st = _recv_until(ws_a, lambda m: _is_phase(m, "auction"), seen_a)
+        _recv_until(ws_b, lambda m: _is_phase(m, "auction"))
+        s = _state(st)
+        assert s["config"]["mode"] == "blind"
+        # (a) the live lot is a mystery card: stats yes, name null
+        assert s["lot"]["player"]["name"] is None
+        assert s["lot"]["player"]["pos"] in ("PG", "SG", "SF", "PF", "C")
+        real_name = room.state.lot.player.name  # server-side truth
+        assert real_name
+
+        # --- Alice buys lot 1 at $3: the sale IS the reveal
+        ws_a.send_json({"action": "bid", "amount": 3})
+        _recv_until(ws_a, lambda m: _bid_at(m, 3), seen_a)
+        sold_msg = _recv_until(ws_a, lambda m: "sold" in _fx_kinds(m), seen_a)
+        sold = _fx(sold_msg, "sold")
+        assert sold["manager"] == uid_a
+        assert sold["player"]["name"] == real_name
+        post = _state(_recv_last_state(seen_a))
+        mine = next(m for m in post["managers"] if m["id"] == uid_a)
+        assert any(
+            sp["player"] and sp["player"]["name"] == real_name
+            for sp in mine["spots"]
+        )  # rostered on the board under the real name
+        assert any(
+            e["kind"] == "sold" and e["player"] == real_name
+            for e in post["log"]
+        )
+
+        # --- lots pass unbid: masked in the fx and in the log, forever
+        passed_msg = _recv_until(
+            ws_a, lambda m: "passed" in _fx_kinds(m), seen_a
+        )
+        assert _fx(passed_msg, "passed")["player"]["name"] is None
+        post_pass = _state(_recv_last_state(seen_a))
+        assert any(
+            e["kind"] == "passed" and e["player"] is None
+            for e in post_pass["log"]
+        )
+
+        # --- first LAST CALL force-assigns to Bob; force fx names for real
+        force_msg = _recv_until(ws_a, lambda m: "force" in _fx_kinds(m), seen_a)
+        assert _fx(force_msg, "force")["manager"] == uid_b
+        assert _fx(force_msg, "force")["player"]["name"]
+
+        # --- Bob leaves; the next force goes to Alice, then FREE PICK
+        _recv_until(ws_b, lambda m: "force" in _fx_kinds(m))
+        ws_b.send_json({"action": "leave"})
+        _recv_until(ws_a, lambda m: "autopilot" in _fx_kinds(m), seen_a)
+        force2 = _recv_until(ws_a, lambda m: "force" in _fx_kinds(m), seen_a)
+        assert _fx(force2, "force")["manager"] == uid_a
+        fp = next(m for m in reversed(seen_a) if _is_phase(m, "free_pick"))
+        pool = _state(fp)["free_pick"]["pool"]
+        assert len(pool) == 7
+        # (b) the revealed pool is a masked menu: ids and stats, no names
+        assert all(p["name"] is None and p["id"] for p in pool)
+
+        # --- picking blind from the pool reveals the player on the roster
+        for _ in range(2):
+            ws_a.send_json({"action": "pick", "player_id": pool[0]["id"]})
+            picked_msg = _recv_until(
+                ws_a, lambda m: "picked" in _fx_kinds(m), seen_a
+            )
+            assert _fx(picked_msg, "picked")["player"]["name"]
+            fp2 = next(m for m in reversed(seen_a) if _is_phase(m, "free_pick"))
+            pool = _state(fp2)["free_pick"]["pool"]
+            assert all(p["name"] is None for p in pool)
+        # the 3rd pick fills Alice; Bob autofills and the draft completes
+        # (lineup window 0) — one commit, one fx batch
+        ws_a.send_json({"action": "pick", "player_id": pool[0]["id"]})
+        last_msg = _recv_until(
+            ws_a, lambda m: "autofill" in _fx_kinds(m), seen_a
+        )
+        assert _fx(last_msg, "picked")["player"]["name"]
+        assert all(
+            a["player"]["name"]
+            for a in _fx(last_msg, "autofill")["assignments"]
+        )
+        assert "complete" in _fx_kinds(last_msg)
+
+        # --- completion flows: sim prompt speaks real names; /simulate works
+        sim_msg = _recv_until(ws_a, lambda m: m.get("type") == "sim", seen_a)
+        assert sim_msg["mode"] == "prompt"
+        assert real_name in sim_msg["share_prompt"]
+        resp = client.post(
+            f"/api/rooms/{room.code}/simulate", json={"token": token_a}
+        )
+        assert resp.status_code == 200
+        _recv_until(ws_a, lambda m: m.get("type") == "sim", seen_a)
+
+    # every frame Alice ever received: live lots nameless, free-pick pools
+    # nameless, "passed" nameless everywhere — everything rostered named
+    dump = json.dumps(seen_a)
+    assert '"stars"' not in dump and '"queue"' not in dump
+    for frame in seen_a:
+        if frame.get("type") == "state":
+            s = _state(frame)
+            if s.get("lot"):
+                assert s["lot"]["player"]["name"] is None
+            if s.get("free_pick"):
+                assert all(
+                    p["name"] is None for p in s["free_pick"]["pool"]
+                )
+            for e in s["log"]:
+                assert (e["player"] is None) == (e["kind"] == "passed")
+        for f in frame.get("fx", []):
+            if f["kind"] == "passed":
+                assert f["player"]["name"] is None

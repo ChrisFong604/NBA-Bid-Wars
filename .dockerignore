@@ -1,0 +1,12 @@
+.git
+.jj
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+scripts/.cache
+deploy
+snapshots
+*.env
+.env*

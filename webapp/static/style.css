@@ -153,12 +153,31 @@ label > input, label > select { margin-top: 4px; }
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
-.mgr-list .rm-cpu { margin-left: 10px; min-height: 30px; min-width: 30px; }
+.mgr-list .rm-cpu, .mgr-list .kick-btn {
+  margin-left: 10px;
+  min-height: 30px;
+  min-width: 30px;
+}
 .mgr-list li.me { color: var(--accent); }
 
 /* ----------------------------------------------------------------- game */
 
 #game { max-width: 1200px; margin: 0 auto; padding: 12px 16px 40px; }
+
+#reclaim-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  animation: fade-in 0.35s ease-out;
+}
 
 #game-header {
   display: flex;
@@ -174,8 +193,10 @@ label > input, label > select { margin-top: 4px; }
 #commish-controls { display: inline-flex; gap: 8px; }
 
 #game-body {
+  /* Stage first in the DOM gets the wide track; the board/feed sidebar
+     keeps the fixed 320px rail. */
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
   align-items: start;
 }
@@ -194,10 +215,25 @@ label > input, label > select { margin-top: 4px; }
 .mgr-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font-weight: 600;
 }
-.mgr-budget { color: var(--green); font-variant-numeric: tabular-nums; }
+/* margin-left:auto keeps the budget pinned right even when a kick ✖
+   follows it (space-between alone would center it). */
+.mgr-budget {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.kick-btn {
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0 7px;
+  font-size: 0.75rem;
+  color: var(--red);
+}
+.kick-btn:hover:not(:disabled) { border-color: var(--red); }
 .mgr-slots { margin-top: 6px; display: grid; gap: 3px; }
 .mgr-slot {
   display: grid;
@@ -264,7 +300,6 @@ label > input, label > select { margin-top: 4px; }
 .lot-name { font-size: 1.9rem; margin: 6px 0 2px; }
 .lot-meta { margin-bottom: 8px; }
 .lot-stats { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
-.lot-stars { font-size: 1.1rem; margin: 4px 0 10px; }
 .lot-bid { font-size: 1.15rem; font-weight: 600; }
 
 .countdown {
@@ -344,6 +379,47 @@ label > input, label > select { margin-top: 4px; }
 .pool-card:disabled { opacity: 0.8; cursor: default; }
 .pc-name { font-weight: 700; }
 .pc-meta, .pc-stats { font-size: 0.8rem; }
+
+/* ---------------------------------------------------------------- snake */
+
+.turn-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.turn-banner.your-turn {
+  border-color: var(--accent);
+  animation: fade-in 0.35s ease-out;
+}
+.pc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.price-badge {
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #14100a;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+/* Cosmetic only — dimmed cards stay clickable; the engine adjudicates. */
+.pool-card.dimmed { opacity: 0.45; }
+
+/* Blind mode — a name the server serialized as null. */
+.mystery { color: var(--muted); font-style: italic; }
 
 .lineup-grid {
   display: grid;

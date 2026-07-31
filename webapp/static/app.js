@@ -15,10 +15,16 @@ const TICK_MS = 250;
 const URGENT_SECONDS = 10;
 const ADDTIME_SECONDS = 30;
 const DRAG_THRESHOLD_PX = 8;
-const ACTIVE_PHASES = ["auction", "free_pick", "lineup"];
+const ACTIVE_PHASES = ["auction", "snake", "free_pick", "lineup"];
 const PHASE_LABELS = {
-  lobby: "Lobby", auction: "Auction", free_pick: "Free pick",
-  lineup: "Lineup", complete: "Complete", cancelled: "Cancelled",
+  lobby: "Lobby", auction: "Auction", snake: "Snake draft",
+  free_pick: "Free pick", lineup: "Lineup", complete: "Complete",
+  cancelled: "Cancelled",
+};
+// Blind mode serializes hidden players' names as null — render this instead.
+const MYSTERY = "❓ Mystery player";
+const MODE_LABELS = {
+  auction: "", blind: "🕶 Blind auction", snake: "🐍 Snake draft",
 };
 
 const S = {
@@ -31,6 +37,10 @@ const S = {
   lastLotSeq: 0,   // for the new-lot flash animation
   tapSlot: null,   // tap-A-tap-B first selection (lineup swap)
   drag: null,      // live pointer-drag bookkeeping (lineup swap)
+  feedSeeded: false,  // log backfill done for the current socket
+  lineupDirty: false, // state arrived mid-drag — repaint the lineup on drop
+  clockSamples: [],   // recent client_now - server_now (median = clock offset)
+  lotMasked: false,   // last-rendered lot hid its name (blind) — sold = reveal
 };
 
 const $ = (id) => document.getElementById(id);
@@ -93,6 +103,11 @@ function statLine(p) {
   return `${p.ppg} ppg · ${p.rpg} rpg · ${p.apg} apg`;
 }
 
+// Player display name — blind mode nulls out hidden names on the wire.
+function pName(p) {
+  return p?.name ?? MYSTERY;
+}
+
 function eraLabel(cfg) {
   return cfg.era_start === cfg.era_end
     ? `${cfg.era_start}s`
@@ -121,6 +136,25 @@ async function copyText(text, btn, label = "✅ Copied!") {
     btn.textContent = label;
     setTimeout(() => { btn.textContent = original; }, 1500);
   }
+}
+
+// Server clocks drift from client clocks; every "state" message carries the
+// server's `now`. The median of recent samples is subtracted from Date.now()
+// when rendering countdowns, so deadlines tick against the server's clock.
+const CLOCK_SAMPLES_MAX = 9;
+
+function noteServerNow(serverNow) {
+  if (typeof serverNow !== "number" || !Number.isFinite(serverNow)) return;
+  const sample = Date.now() / 1000 - serverNow;
+  S.clockSamples = [...S.clockSamples, sample].slice(-CLOCK_SAMPLES_MAX);
+}
+
+function clockOffset() {
+  const n = S.clockSamples.length;
+  if (!n) return 0;
+  const sorted = [...S.clockSamples].sort((a, b) => a - b);
+  const mid = Math.floor(n / 2);
+  return n % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function toast(message, kind = "info") {
@@ -161,6 +195,7 @@ function connect() {
   S.ws = ws;
   ws.onopen = () => {
     S.backoffMs = RECONNECT_BASE_MS;
+    S.feedSeeded = false; // backfill the feed from the next state's log
     $("conn").hidden = true;
   };
   ws.onmessage = (ev) => {
@@ -179,6 +214,13 @@ function connect() {
   };
 }
 
+function reconnect() {
+  const old = S.ws;
+  S.ws = null; // detach first — old.onclose must not schedule a retry
+  try { old?.close(); } catch { /* already closed */ }
+  connect();
+}
+
 function send(payload) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) {
     S.ws.send(JSON.stringify(payload));
@@ -190,6 +232,11 @@ function send(payload) {
 function handleMessage(msg) {
   if (msg.type === "state") {
     S.state = msg.state;
+    noteServerNow(msg.now);
+    if (!S.feedSeeded) { // once per socket, before any live fx lands
+      seedFeed(msg.state);
+      S.feedSeeded = true;
+    }
     render();
   } else if (msg.type === "fx") {
     handleFx(msg.fx || []);
@@ -224,10 +271,45 @@ function enterRoom(session) {
   S.sim = null;
   S.lastLotSeq = 0;
   S.tapSlot = null;
+  S.feedSeeded = false;
+  S.lineupDirty = false;
+  S.lotMasked = false;
   S.backoffMs = RECONNECT_BASE_MS;
   $("feed").replaceChildren();
   if (hashCode() !== session.room) location.hash = session.room;
   connect();
+}
+
+// Reclaiming goes through POST /join with the saved token — the server
+// reattaches the same identity and dispatches the Join that wakes an
+// autopilot team. Opening the WS directly never wakes anyone.
+async function reclaimAndEnter(saved) {
+  try {
+    const res = await api(`/api/rooms/${saved.room}/join`,
+      { name: saved.name, token: saved.token });
+    startSession(res, saved.name);
+  } catch (err) {
+    if (err.message === "Room not found.") {
+      try { localStorage.removeItem(storeKey(saved.room)); } catch {}
+    }
+    toast(err.message, "error");
+    showSection("home");
+  }
+}
+
+async function reclaimTeam(e) {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    await api(`/api/rooms/${S.session.room}/join`,
+      { name: S.session.name, token: S.session.token });
+    reconnect(); // fresh socket + fresh state after the wake-up Join
+  } catch (err) {
+    if (err.message === "Room not found.") { roomGone(); return; }
+    toast(err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function exitToHome() {
@@ -246,16 +328,25 @@ function exitToHome() {
 function fxLines(fx) {
   switch (fx.kind) {
     case "sold":
-      return [`🔨 ${fx.player.name} → ${mgrName(fx.manager)} for $${fx.price}`];
+      // Blind reveal: the lot card said "❓ Mystery player" — the sold fx
+      // carries the real name, so the feed line celebrates it.
+      return S.lotMasked && fx.player?.name != null
+        ? [`🔨 Sold to ${mgrName(fx.manager)} for $${fx.price} — ` +
+           `👀 It was ${fx.player.name}!`]
+        : [`🔨 ${pName(fx.player)} → ${mgrName(fx.manager)} for $${fx.price}`];
     case "passed":
-      return [`↩️ ${fx.player.name} passed — back in the pool`];
+      return [`↩️ ${pName(fx.player)} passed — back in the pool`];
     case "force":
-      return [`⚡ ${fx.player.name} force-assigned to ${mgrName(fx.manager)}`];
+      return [`⚡ ${pName(fx.player)} force-assigned to ${mgrName(fx.manager)}`];
     case "picked":
-      return [`🎯 ${mgrName(fx.manager)} picked ${fx.player.name}`];
+      return [`🎯 ${mgrName(fx.manager)} picked ${pName(fx.player)}`];
     case "autofill":
       return fx.assignments.map(
-        (a) => `🤖 ${a.player.name} auto-filled → ${mgrName(a.manager)}`);
+        (a) => `🤖 ${pName(a.player)} auto-filled → ${mgrName(a.manager)}`);
+    case "snake_turn":
+      return [fx.manager === S.state?.you
+        ? "🐍 You're on the clock — make your pick!"
+        : `🐍 ${mgrName(fx.manager)} is on the clock`];
     case "lottery_open":
       return [`🎰 ALL-IN SHOWDOWN — ${fx.participants.map(mgrName).join(" vs ")}` +
               ` tied at $${fx.amount}!`];
@@ -305,6 +396,38 @@ function feedPush(line) {
   while (feed.children.length > FEED_CAP) feed.lastChild.remove();
 }
 
+// ----------------------------------------------------------- feed backfill
+
+// state.log entries carry the player NAME (string; null when blind-masked),
+// not a player object — phrasing mirrors fxLines so backfilled and live
+// lines read identically.
+function logLine(entry) {
+  const name = entry.player ?? MYSTERY;
+  switch (entry.kind) {
+    case "sold":
+      return `🔨 ${name} → ${mgrName(entry.manager)} for $${entry.price}`;
+    case "passed":
+      return `↩️ ${name} passed — back in the pool`;
+    case "force":
+      return `⚡ ${name} force-assigned to ${mgrName(entry.manager)}`;
+    case "pick": // snake picks log a price; free picks are on the house
+      return `🎯 ${mgrName(entry.manager)} picked ${name}` +
+        (entry.price ? ` ($${entry.price})` : "");
+    case "autofill":
+      return `🤖 ${name} auto-filled → ${mgrName(entry.manager)}`;
+    default:
+      return null;
+  }
+}
+
+function seedFeed(st) {
+  $("feed").replaceChildren(); // rebuild from the log — no duplicates
+  for (const entry of st.log || []) { // chronological; prepend ends newest-first
+    const line = logLine(entry);
+    if (line) feedPush(line);
+  }
+}
+
 // ------------------------------------------------------------ render loop
 
 function showSection(name) {
@@ -325,6 +448,9 @@ function render() {
     renderHeader(st);
     renderBoard(st);
     renderStage(st);
+    const me = st.managers.find((m) => m.id === st.you);
+    $("reclaim-bar").hidden =
+      !me || !me.autopilot || !ACTIVE_PHASES.includes(st.phase);
   }
   $("pause-overlay").hidden = !st.paused;
   $("btn-resume").hidden = st.you !== st.commissioner;
@@ -336,9 +462,12 @@ function render() {
 function renderLobby(st) {
   $("lobby-code").textContent = S.session.room;
   const cfg = st.config;
+  const mode = MODE_LABELS[cfg.mode] || "";
+  const budget = cfg.mode === "snake" ? "$15 fixed" : `$${cfg.budget} budget`;
   $("lobby-cfg").textContent =
-    `$${cfg.budget} budget · ${cfg.lot_seconds}s clock · ${eraLabel(cfg)}` +
-    ` · pool: ${cfg.pool_depth} · sim: ${cfg.sim} · lineup ${cfg.lineup_seconds}s`;
+    `${mode ? `${mode} · ` : ""}${budget} · ${cfg.lot_seconds}s clock` +
+    ` · ${eraLabel(cfg)} · pool: ${cfg.pool_depth} · sim: ${cfg.sim}` +
+    ` · lineup ${cfg.lineup_seconds}s`;
   const isCommish = st.you === st.commissioner;
   $("lobby-mgrs").replaceChildren(
     ...st.managers.map((m) => el(
@@ -353,7 +482,13 @@ function renderLobby(st) {
             title: "Remove CPU",
             onclick: () => send({ action: "remove_cpu", cpu_id: m.id }),
           }, "✖")
-        : null,
+        : !m.cpu && isCommish && m.id !== st.you
+          ? el("button", {
+              class: "ghost small-btn kick-btn",
+              title: `Kick ${m.name}`,
+              onclick: () => send({ action: "kick", target: m.id }),
+            }, "✖")
+          : null,
     )),
   );
   $("btn-start").hidden = !isCommish;
@@ -368,15 +503,18 @@ function renderHeader(st) {
   $("gh-code").textContent = S.session.room;
   $("gh-phase").textContent = PHASE_LABELS[st.phase] ?? st.phase;
   $("gh-pool").textContent =
-    st.phase === "auction" || st.phase === "free_pick"
+    ["auction", "snake", "free_pick"].includes(st.phase)
       ? `${st.queue_count} in pool` : "";
   const isCommish = st.you === st.commissioner;
   $("commish-controls").hidden = !isCommish || !ACTIVE_PHASES.includes(st.phase);
   $("btn-pause").hidden = st.paused;
-  $("btn-addtime").hidden = !["auction", "free_pick"].includes(st.phase);
+  $("btn-addtime").hidden =
+    !["auction", "snake", "free_pick"].includes(st.phase);
 }
 
 function renderBoard(st) {
+  const canKick =
+    st.you === st.commissioner && ACTIVE_PHASES.includes(st.phase);
   $("board").replaceChildren(...st.managers.map((m) => el(
     "div",
     { class: `mgr${m.id === st.you ? " me" : ""}` },
@@ -385,7 +523,14 @@ function renderBoard(st) {
         `${m.cpu ? "🤖 " : ""}${m.name}` +
         `${m.id === st.commissioner ? " 👑" : ""}` +
         `${m.autopilot ? " 💤" : ""}`),
-      el("span", { class: "mgr-budget" }, `$${m.budget}`)),
+      el("span", { class: "mgr-budget" }, `$${m.budget}`),
+      canKick && m.id !== st.you
+        ? el("button", {
+            class: "ghost kick-btn",
+            title: `Kick ${m.name}`,
+            onclick: () => send({ action: "kick", target: m.id }),
+          }, "✖")
+        : null),
     el("div", { class: "mgr-slots" }, m.spots.map((s) => el(
       "div", { class: "mgr-slot" },
       el("span", { class: "slot-tag" }, s.slot),
@@ -400,6 +545,7 @@ function renderBoard(st) {
 // ------------------------------------------------------------------ stage
 
 function renderStage(st) {
+  if (S.drag && st.phase !== "lineup") abortDrag(); // phase moved on mid-drag
   const zone = $("lot-zone");
   const stage = $("stage");
   if (st.phase === "auction" && st.lot) {
@@ -410,11 +556,20 @@ function renderStage(st) {
     stage.replaceChildren();
     return;
   }
-  zone.hidden = true;
-  if (st.phase === "free_pick" && st.free_pick) {
+  zone.hidden = true; // snake/free_pick/lineup: no lot card, no bid bar
+  if (st.phase === "snake" && st.turn) {
+    stage.replaceChildren(snakeView(st));
+  } else if (st.phase === "free_pick" && st.free_pick) {
     stage.replaceChildren(freePickView(st));
   } else if (st.phase === "lineup") {
-    stage.replaceChildren(lineupView(st));
+    if (S.drag) {
+      // A broadcast landed mid-drag (CPUs self-arrange constantly) — keep
+      // the gesture alive and repaint from fresh state on drop.
+      S.lineupDirty = true;
+    } else {
+      S.lineupDirty = false;
+      stage.replaceChildren(lineupView(st));
+    }
   } else if (st.phase === "complete") {
     stage.replaceChildren(completeView(st));
   } else if (st.phase === "cancelled") {
@@ -431,6 +586,7 @@ function renderLot(st) {
   const p = lot.player;
   const fresh = lot.seq !== S.lastLotSeq;
   S.lastLotSeq = lot.seq;
+  S.lotMasked = p.name == null; // blind mode — the sold fx is the reveal
   const meta = [p.pos, p.team, `${p.decade}s`];
   if (p.prime) meta.push(`prime ${p.prime}`);
   const card = el("div", { class: `lot-card${fresh ? " flash" : ""}` },
@@ -438,7 +594,7 @@ function renderLot(st) {
       el("span", { class: "muted small" }, `Lot #${lot.seq}`),
       lot.last_call ? el("span", { class: "last-call" }, "🚨 LAST CALL") : null,
       el("span", { class: "countdown big", dataset: { deadline: lot.deadline } })),
-    el("h2", { class: "lot-name" }, p.name),
+    el("h2", { class: `lot-name${p.name == null ? " mystery" : ""}` }, pName(p)),
     el("div", { class: "lot-meta muted" }, meta.join(" · ")),
     el("div", { class: "lot-stats" }, statLine(p)),
     el("div", { class: "lot-bid" },
@@ -456,15 +612,16 @@ function updateBidBar(st) {
   const leading = me != null && lot.leader === me.id;
   const inShowdown =
     lot.lottery != null && me != null && lot.lottery.participants.includes(me.id);
+  const onAutopilot = me != null && me.autopilot;
   // Cosmetic only — the engine re-validates every bid. Richer managers keep
   // live bid controls during a showdown (outbidding cancels it) — including
   // the dragged-in leader, whose raise is what kills their own lottery.
   const blocked = (need) =>
-    me == null || full || (leading && lot.lottery == null) ||
+    me == null || onAutopilot || full || (leading && lot.lottery == null) ||
     me.budget < lot.current_bid + need;
   // An exact-stack tie is a legal Custom bid: it opens or joins the showdown.
   const allInTie =
-    me != null && !full && !leading && !inShowdown &&
+    me != null && !onAutopilot && !full && !leading && !inShowdown &&
     lot.current_bid >= 1 && me.budget === lot.current_bid;
   for (const btn of document.querySelectorAll(".bid-quick")) {
     btn.disabled = blocked(Number(btn.dataset.inc));
@@ -473,6 +630,7 @@ function updateBidBar(st) {
   $("bid-custom").disabled = blocked(1) && !allInTie;
   $("bid-note").textContent =
     me == null ? "Spectating"
+      : onAutopilot ? "On autopilot — reclaim your team to bid"
       : full ? "Roster full"
       : inShowdown && leading && me.budget > lot.current_bid
         ? "🎰 Lock in a number — or raise your bid to call the showdown off"
@@ -529,6 +687,45 @@ function revealCard(fx) {
         `guessed ${g.guess} · off by ${Math.abs(g.guess - fx.mystery)}`))));
 }
 
+// ------------------------------------------------------------------ snake
+
+function snakeView(st) {
+  const turn = st.turn;
+  const me = st.managers.find((m) => m.id === st.you);
+  const myTurn = me != null && turn.manager === me.id;
+  const empties = me ? me.spots.filter((s) => !s.player).length : 0;
+  // Cosmetic mirror of the engine's dollar-per-empty-slot reserve: a pick
+  // must leave $1 for each other empty slot. Dimmed cards stay clickable —
+  // the engine is the authority and rejects with the real reason.
+  const feasible = (price) =>
+    me != null && price <= me.budget && me.budget - price >= empties - 1;
+  return el("div", { class: "stage-block" },
+    el("div", { class: `turn-banner${myTurn ? " your-turn" : ""}` },
+      el("span", { class: "turn-text" },
+        myTurn
+          ? `🐍 Your pick — $${me.budget} left`
+          : `🐍 ${mgrName(turn.manager)} is on the clock`),
+      el("span", { class: "countdown big", dataset: { deadline: turn.deadline } })),
+    el("p", { class: "muted small" },
+      myTurn
+        ? "Tap a player to draft them — keep $1 for every other empty slot."
+        : "The pool is open — every price is the player's star tier."),
+    el("div", { class: "pool-grid" }, (st.pool || []).map((p) => el(
+      "button",
+      {
+        class: `pool-card${myTurn && !feasible(p.price) ? " dimmed" : ""}`,
+        disabled: !myTurn,
+        onclick: () => send({ action: "pick", player_id: p.id }),
+      },
+      el("div", { class: "pc-head" },
+        el("span", { class: "pc-name" }, pName(p)),
+        el("span", { class: "price-badge" }, `$${p.price}`)),
+      el("div", { class: "pc-meta muted" },
+        `${p.pos} · ${p.team} · ${p.decade}s`),
+      el("div", { class: "pc-stats muted" }, statLine(p)),
+    ))));
+}
+
 // -------------------------------------------------------------- free pick
 
 function freePickView(st) {
@@ -549,7 +746,8 @@ function freePickView(st) {
         disabled: !isPicker,
         onclick: () => send({ action: "pick", player_id: p.id }),
       },
-      el("div", { class: "pc-name" }, p.name),
+      el("div", { class: `pc-name${p.name == null ? " mystery" : ""}` },
+        pName(p)),
       el("div", { class: "pc-meta muted" },
         `${p.pos} · ${p.team} · ${p.decade}s`),
       el("div", { class: "pc-stats muted" }, statLine(p)),
@@ -559,10 +757,6 @@ function freePickView(st) {
 // ----------------------------------------------------------------- lineup
 
 function lineupView(st) {
-  if (S.drag) { // a re-render mid-drag orphans the source card — abort cleanly
-    S.drag.ghost?.remove();
-    S.drag = null;
-  }
   const me = st.managers.find((m) => m.id === st.you);
   const block = el("div", { class: "stage-block" },
     el("div", { class: "stage-head" },
@@ -598,6 +792,21 @@ function lineupCard(s) {
   card.addEventListener("pointerup", onLineupUp);
   card.addEventListener("pointercancel", onLineupCancel);
   return card;
+}
+
+function abortDrag() {
+  const d = S.drag;
+  if (!d) return;
+  S.drag = null;
+  d.card.classList.remove("drag-src");
+  d.ghost?.remove();
+  clearDropHints();
+}
+
+function flushLineupRender() {
+  if (!S.lineupDirty) return;
+  S.lineupDirty = false;
+  render(); // paint the broadcasts skipped while the gesture was live
 }
 
 function onLineupDown(e, slot, card) {
@@ -646,6 +855,7 @@ function onLineupUp(e) {
     if (target && target.dataset.slot && target.dataset.slot !== d.slot) {
       send({ action: "swap", a: d.slot, b: target.dataset.slot });
     }
+    flushLineupRender();
     return;
   }
   // tap-A-tap-B path — same action, same engine authority
@@ -660,15 +870,13 @@ function onLineupUp(e) {
     S.tapSlot = null;
     send({ action: "swap", a, b: d.slot });
   }
+  flushLineupRender();
 }
 
 function onLineupCancel(e) {
-  const d = S.drag;
-  if (!d || e.pointerId !== d.id) return;
-  S.drag = null;
-  d.card.classList.remove("drag-src");
-  d.ghost?.remove();
-  clearDropHints();
+  if (!S.drag || e.pointerId !== S.drag.id) return;
+  abortDrag();
+  flushLineupRender();
 }
 
 // ------------------------------------------------------------- completion
@@ -681,14 +889,16 @@ function completeView(st) {
 }
 
 function rosterCard(m, st) {
+  // Sum of prices paid, not config.budget - budget: snake plays with the
+  // fixed $15 budget regardless of the configured auction budget.
+  const spent = m.spots.reduce((sum, s) => sum + (s.price || 0), 0);
   return el("div", { class: `panel roster-card${m.id === st.you ? " me" : ""}` },
     el("div", { class: "mgr-head" },
       el("span", { class: "mgr-name" },
         `${m.cpu ? "🤖 " : ""}${m.name}` +
         `${m.id === st.commissioner ? " 👑" : ""}` +
         `${m.autopilot ? " 💤" : ""}`),
-      el("span", { class: "muted small" },
-        `spent $${st.config.budget - m.budget}`)),
+      el("span", { class: "muted small" }, `spent $${spent}`)),
     el("div", { class: "mgr-slots" }, m.spots.map((s) => el(
       "div", { class: "mgr-slot" },
       el("span", { class: "slot-tag" }, s.slot),
@@ -767,7 +977,8 @@ function fmtClock(rem) {
 }
 
 function tick() {
-  const now = Date.now() / 1000;
+  // Deadlines are server epoch seconds — correct for local clock drift.
+  const now = Date.now() / 1000 - clockOffset();
   const paused = Boolean(S.state?.paused);
   for (const node of document.querySelectorAll("[data-deadline]")) {
     const deadline = parseFloat(node.dataset.deadline);
@@ -790,12 +1001,21 @@ function tick() {
 // ------------------------------------------------------------------- boot
 
 function wireHome() {
+  // Snake plays with the fixed $15 budget — the budget input goes inert.
+  const syncMode = () => {
+    const snake = $("c-mode").value === "snake";
+    $("c-budget").disabled = snake;
+    $("c-budget-note").hidden = !snake;
+  };
+  $("c-mode").addEventListener("change", syncMode);
+  syncMode();
   $("create-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("c-name").value.trim();
     try {
       const res = await api("/api/rooms", {
         name,
+        mode: $("c-mode").value,
         budget: Math.floor(Number($("c-budget").value)),
         clock: Math.floor(Number($("c-clock").value)),
         lineup: Math.floor(Number($("c-lineup").value)),
@@ -862,6 +1082,7 @@ function wireGame() {
   $("btn-lobby-cancel").addEventListener("click", () => {
     if (confirm("Cancel the room for everyone?")) send({ action: "cancel" });
   });
+  $("btn-reclaim").addEventListener("click", reclaimTeam);
   $("btn-leave").addEventListener("click", () => {
     send({ action: "leave" }); // lobby only — engine rule
     const code = S.session?.room;
@@ -887,7 +1108,7 @@ function boot() {
     $("j-code").value = code;
     const saved = loadSession(code);
     if (saved) {
-      enterRoom(saved);
+      reclaimAndEnter(saved); // /join reclaim wakes autopilot; WS alone won't
       return void setInterval(tick, TICK_MS);
     }
   }

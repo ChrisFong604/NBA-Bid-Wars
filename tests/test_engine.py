@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 
 import pytest
 
 from draftbot import engine
 from draftbot.models import (
+    SNAKE_BUDGET,
     ArmTimerFx,
     AutoFilledFx,
     AutopilotFx,
@@ -45,10 +47,12 @@ from draftbot.models import (
     Player,
     Resume,
     ResumedFx,
+    SnakeTurnFx,
     SoldFx,
     Start,
     Swap,
     TimerExpired,
+    snake_price,
 )
 from helpers import (
     auction_state,
@@ -1075,6 +1079,303 @@ def test_afk_sweep_flags_idle_managers_at_resolution():
     assert not state2.manager(1).autopilot
     assert state2.phase == "free_pick"  # only manager 1 left active
     assert fx_of(fx, FreePickFx)[0].manager_id == 1
+
+
+# --------------------------------------------------------------- snake mode
+
+
+def sp(pid: str, stars: int, ppg: float = 10.0) -> Player:
+    return Player(
+        id=pid, name=f"P {pid}", team="TST", pos="PG",
+        ppg=ppg, rpg=0.0, apg=0.0, stars=stars,
+    )
+
+
+def snake_state(
+    managers: tuple, queue: tuple[Player, ...], pick_deadline: float = 5000.0
+) -> DraftState:
+    return DraftState(
+        config=Config(mode="snake"),
+        commissioner_id=managers[0].user_id,
+        phase="snake",
+        managers=managers,
+        queue=queue,
+        pick_deadline=pick_deadline,
+    )
+
+
+def test_snake_start_forces_budgets_and_arms_first_turn():
+    cfg = Config(mode="snake", budget=50)  # config.budget must be ignored
+    state, fx, _ = start_draft(3, cfg=cfg)
+    assert state.phase == "snake"
+    assert state.lot is None and state.lot_seq == 0
+    assert all(m.budget == SNAKE_BUDGET for m in state.managers)
+    assert len(state.queue) == 5 * 3  # the queue IS the open pool
+    deadline = 1000.0 + cfg.lot_seconds
+    assert state.pick_deadline == deadline
+    assert fx == [
+        BoardFx(),
+        SnakeTurnFx(1, deadline),
+        ArmTimerFx("snake", -1, deadline),
+    ]
+
+
+def test_blind_mode_start_runs_auction_untouched():
+    cfg = Config(mode="blind")
+    state, fx, _ = start_draft(2, cfg=cfg)
+    assert state.phase == "auction"
+    assert state.lot is not None and state.lot.seq == 1
+    assert all(m.budget == cfg.budget for m in state.managers)
+    assert fx_of(fx, LotOpened)
+
+
+def test_snake_turn_order_snakes_through_full_draft():
+    state, fx, _ = start_draft(2, cfg=Config(mode="snake"))
+    order = [fx_of(fx, SnakeTurnFx)[0].manager_id]
+    now = 1001.0
+    while state.phase == "snake":
+        state, fx = engine.apply(state, Pick(order[-1], state.queue[0].id, now))
+        turns = fx_of(fx, SnakeTurnFx)
+        if turns:
+            order.append(turns[0].manager_id)
+            assert fx_of(fx, ArmTimerFx) == [
+                ArmTimerFx("snake", -1, now + CFG.lot_seconds)
+            ]
+            assert state.pick_deadline == now + CFG.lot_seconds
+        now += 1.0
+    assert order == [1, 2, 2, 1, 1, 2, 2, 1, 1, 2]  # snaking reversal
+    assert state.phase == "lineup" and not state.queue
+    # make_players is all 3-star: every spot cost $3, budgets land on $0.
+    for m in state.managers:
+        assert m.full and m.budget == 0
+        assert all(s.price == 3 for s in m.spots)
+    state2, fx2 = engine.apply(
+        state,
+        TimerExpired("lineup", -1, state.lineup_deadline, state.lineup_deadline),
+    )
+    assert state2.phase == "complete" and fx2 == [CompleteFx()]
+
+
+def test_snake_wrong_turn_and_unknown_player_rejected():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    target = state.queue[0].id
+    state2, fx = engine.apply(state, Pick(2, target, 1001.0))
+    assert state2 is state and fx == [ErrorFx(2, "It's not your pick.")]
+    state2, fx = engine.apply(state, Pick(999, target, 1001.0))
+    assert state2 is state and fx == [ErrorFx(999, "It's not your pick.")]
+    state2, fx = engine.apply(state, Pick(1, "not-a-player", 1001.0))
+    assert state2 is state
+    assert fx == [ErrorFx(1, "That player isn't in the pool.")]
+
+
+def test_snake_autopilot_manager_cannot_pick():
+    # Left/kicked while on the clock — the ghost can't keep drafting; the
+    # turn timer autopicks for them instead (mirrors _bid's autopilot gate).
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    state, _ = engine.apply(state, Leave(1))
+    assert state.manager(1).autopilot
+    target = state.queue[0].id
+    state2, fx = engine.apply(state, Pick(1, target, 1001.0))
+    assert state2 is state
+    assert fx == [ErrorFx(1, "You're on autopilot — reclaim your team to pick.")]
+
+
+def test_snake_pick_feasibility_gates():
+    cfg = Config(mode="snake")
+    a = make_manager(1, cfg, budget=9, filled=3)
+    b = make_manager(2, cfg, budget=3, filled=3)
+    big, tier3, tier2, tier1 = (
+        sp("big", 5), sp("t3", 3), sp("t2", 2), sp("t1", 1)
+    )
+    state = snake_state((a, b), (big, tier3, tier2, tier1))
+    # picks_made=6, N=2 -> round 3 (odd) -> manager 2 is on the clock.
+    state2, fx = engine.apply(state, Pick(2, "big", 4000.0))
+    assert state2 is state
+    assert fx == [ErrorFx(2, "That's a $5 player — you've only got $3.")]
+    # $3 fits the budget but leaves $0 for the other empty slot.
+    state2, fx = engine.apply(state, Pick(2, "t3", 4000.0))
+    assert state2 is state
+    assert fx == [ErrorFx(
+        2,
+        "$3 would leave you $0, but you need to keep $1 for each of "
+        "your 1 other empty slot(s).",
+    )]
+    # $2 leaves exactly the $1-per-slot reserve -> sold at sticker price.
+    state2, fx = engine.apply(state, Pick(2, "t2", 4000.0))
+    m = state2.manager(2)
+    assert m.budget == 1
+    assert m.spots[3].player == tier2 and m.spots[3].price == 2
+    assert "t2" not in {p.id for p in state2.queue}
+    assert state2.log[-1] == LogEntry("pick", tier2, 2, 2)
+    # picks_made=7 -> still round 3 -> reversal puts manager 1 up next.
+    deadline = 4000.0 + cfg.lot_seconds
+    assert fx == [
+        PickedFx(tier2, 2), BoardFx(),
+        SnakeTurnFx(1, deadline), ArmTimerFx("snake", -1, deadline),
+    ]
+    assert state2.pick_deadline == deadline
+
+
+def test_snake_timer_autopick_no_autopilot_flip_and_stale_guard():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    deadline = state.pick_deadline
+    state2, fx = engine.apply(
+        state, TimerExpired("snake", -1, deadline - 1.0, deadline)
+    )
+    assert state2 is state and fx == []  # stale deadline echo
+    state2, fx = engine.apply(state, TimerExpired("pick", -1, deadline, deadline))
+    assert state2 is state and fx == []  # wrong timer kind for the phase
+    auction, _, _ = start_draft(2)
+    a2, fx = engine.apply(
+        auction, TimerExpired("snake", -1, auction.lot.deadline, 2000.0)
+    )
+    assert a2 is auction and fx == []  # "snake" fire outside the phase
+    state2, fx = engine.apply(state, TimerExpired("snake", -1, deadline, deadline))
+    assert fx_of(fx, PickedFx)[0].manager_id == 1
+    m = state2.manager(1)
+    assert not m.autopilot  # idling one snake turn never costs the team
+    assert m.budget == SNAKE_BUDGET - 3
+    assert state2.log[0] == LogEntry("pick", m.spots[0].player, 1, 3)
+    assert fx_of(fx, SnakeTurnFx)[0].manager_id == 2
+
+
+def test_snake_autopick_ranks_stars_then_stat_line():
+    cfg = Config(mode="snake")
+    a = make_manager(1, cfg, budget=SNAKE_BUDGET)
+    b = make_manager(2, cfg, budget=SNAKE_BUDGET)
+    queue = (
+        sp("s4-stats", 4, ppg=35.0),  # best stat line, fewer stars
+        sp("s5-best", 5, ppg=30.0),
+        sp("s5", 5, ppg=20.0),
+    ) + tuple(sp(f"f{i}", 1, ppg=1.0) for i in range(7))
+    state = snake_state((a, b), queue)
+    state2, fx = engine.apply(state, TimerExpired("snake", -1, 5000.0, 5000.0))
+    picked = fx_of(fx, PickedFx)[0]
+    assert picked.player.id == "s5-best" and picked.manager_id == 1
+    assert state2.manager(1).budget == SNAKE_BUDGET - 5
+
+
+def test_snake_autopilot_turns_resolve_immediately_through_reversal():
+    cfg = Config(mode="snake")
+    a = make_manager(1, cfg, budget=SNAKE_BUDGET)
+    b = make_manager(2, cfg, budget=SNAKE_BUDGET, autopilot=True)
+    queue = tuple(sp(f"q{i}", (i % 5) + 1, ppg=float(i)) for i in range(10))
+    state = snake_state((a, b), queue)
+    state2, fx = engine.apply(state, Pick(1, "q0", 4000.0))
+    # The autopilot team's round-0 and round-1 turns are back-to-back
+    # (snake reversal) and resolve inside the same apply.
+    picked = fx_of(fx, PickedFx)
+    assert [(p.manager_id, p.player.id) for p in picked] == [
+        (1, "q0"), (2, "q9"), (2, "q4"),  # best feasible by (stars, stats)
+    ]
+    assert fx_of(fx, SnakeTurnFx)[0].manager_id == 1  # back on the clock
+    m2 = state2.manager(2)
+    assert m2.empty_slots == 3 and m2.budget == SNAKE_BUDGET - 10
+
+
+def test_snake_forced_bargain_rescues_stranded_managers():
+    cfg = Config(mode="snake")
+    a = make_manager(1, cfg, budget=12, filled=2)
+    b = make_manager(2, cfg, budget=2, filled=2)  # priced out of every tier
+    c5b, c5a = sp("c5b", 5, ppg=30.0), sp("c5a", 5, ppg=10.0)
+    c4b, c4a = sp("c4b", 4, ppg=20.0), sp("c4a", 4, ppg=10.0)
+    c4c, c5c = sp("c4c", 4, ppg=5.0), sp("c5c", 5, ppg=2.0)
+    state = snake_state((a, b), (c5b, c5a, c4b, c4a, c4c, c5c))
+    # picks_made=4 -> manager 1 picks; manager 2's back-to-back turns can't
+    # afford ANY remaining tier -> forced bargains, never a deadlock.
+    state, fx = engine.apply(state, Pick(1, "c5b", 4000.0))
+    assert fx_of(fx, ForceAssignedFx) == [
+        ForceAssignedFx(c4b, 2),  # cheapest tier, best stat line first
+        ForceAssignedFx(c4a, 2),
+    ]
+    m2 = state.manager(2)
+    assert m2.budget == 0  # charged min(price, budget): $2 then $0
+    forces = [e for e in state.log if e.kind == "force"]
+    assert [(e.player.id, e.price) for e in forces] == [("c4b", 2), ("c4a", 0)]
+    assert all(e.price <= snake_price(e.player) for e in forces)
+    assert fx_of(fx, SnakeTurnFx)[0].manager_id == 1
+    # Manager 1 spends down to $2; the $4/$5 leftovers strand them too — a
+    # live (non-autopilot) manager is still force-resolved on their turn.
+    state, fx = engine.apply(state, Pick(1, "c5a", 4010.0))
+    assert fx_of(fx, ForceAssignedFx) == [
+        ForceAssignedFx(c4c, 1),
+        ForceAssignedFx(c5c, 2),
+    ]
+    assert state.phase == "lineup" and not state.queue
+    assert all(m.full and m.budget == 0 for m in state.managers)
+    assert fx_of(fx, LineupPhaseFx)
+
+
+def test_snake_pause_resume_shifts_clock_and_rearms():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    deadline = state.pick_deadline
+    state, fx = engine.apply(state, Pause(1, 1010.0))
+    assert state.paused and state.pause_remaining == deadline - 1010.0
+    assert fx == [CancelTimerFx(), PausedFx()]
+    _, fxp = engine.apply(state, Pick(1, state.queue[0].id, 1011.0))
+    assert fxp == [ErrorFx(1, "The draft is paused.")]
+    state2, fxt = engine.apply(  # paused: even a matching fire is ignored
+        state, TimerExpired("snake", -1, deadline, deadline)
+    )
+    assert state2 is state and fxt == []
+    state, fx = engine.apply(state, Resume(1, 2000.0))
+    shifted = 2000.0 + (deadline - 1010.0)
+    assert not state.paused and state.pick_deadline == shifted
+    assert fx == [ResumedFx(None), ArmTimerFx("snake", -1, shifted)]
+    # The pre-pause deadline is stale now; the shifted one autopicks.
+    state2, fx = engine.apply(state, TimerExpired("snake", -1, deadline, shifted))
+    assert state2 is state and fx == []
+    state2, fx = engine.apply(state, TimerExpired("snake", -1, shifted, shifted))
+    assert fx_of(fx, PickedFx)[0].manager_id == 1
+
+
+def test_snake_addtime_style_deadline_bump_respects_stale_guard():
+    # addtime isn't an engine event: the outer layer extends pick_deadline
+    # in place and re-arms kind "snake" — the stale guard must honor it.
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    old = state.pick_deadline
+    state = replace(state, pick_deadline=old + 30.0)
+    state2, fx = engine.apply(state, TimerExpired("snake", -1, old, old))
+    assert state2 is state and fx == []  # the pre-bump fire is stale
+    state2, fx = engine.apply(
+        state, TimerExpired("snake", -1, old + 30.0, old + 30.0)
+    )
+    assert fx_of(fx, PickedFx)
+
+
+def test_snake_leave_flips_autopilot_and_rejoin_reclaims():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    state, fx = engine.apply(state, Leave(2))
+    assert state.manager(2).autopilot
+    assert fx_of(fx, AutopilotFx) and fx_of(fx, BoardFx)
+    state, fx = engine.apply(state, Join(2, "M2"))
+    assert not state.manager(2).autopilot
+    assert fx == [BoardFx()]
+    # A leaver's turns autopick in the advance loop instead of arming.
+    state, _ = engine.apply(state, Leave(2))
+    deadline = state.pick_deadline
+    state, fx = engine.apply(state, TimerExpired("snake", -1, deadline, deadline))
+    picked = fx_of(fx, PickedFx)
+    assert [p.manager_id for p in picked] == [1, 2, 2]  # 2 never gets a clock
+    assert fx_of(fx, SnakeTurnFx)[0].manager_id == 1
+
+
+def test_snake_swap_allowed_mid_snake():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    state, _ = engine.apply(state, Pick(1, state.queue[0].id, 1001.0))
+    player = state.manager(1).spots[0].player
+    state2, fx = engine.apply(state, Swap(1, "PG", "C"))
+    assert fx == [BoardFx()]
+    m = state2.manager(1)
+    assert m.spots[0].player is None and m.spots[0].price == 0
+    assert m.spots[4].player == player and m.spots[4].price == 3
+
+
+def test_snake_cancel_works_mid_snake():
+    state, _, _ = start_draft(2, cfg=Config(mode="snake"))
+    state2, fx = engine.apply(state, Cancel(1))
+    assert state2.phase == "cancelled"
+    assert fx == [CancelTimerFx(), CancelledFx()]
 
 
 # ------------------------------------------------------------------- redeal

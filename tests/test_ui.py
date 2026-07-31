@@ -500,6 +500,80 @@ def _rated(pid: str, pos: str, stars: int) -> Player:
     )
 
 
+def _snake_spots(*players: Player) -> tuple[Spot, ...]:
+    slots = ("PG", "SG", "SF", "PF", "C")
+    return tuple(
+        Spot(slot, players[i] if i < len(players) else None)
+        for i, slot in enumerate(slots)
+    )
+
+
+def _snake_state(
+    managers: tuple[Manager, ...],
+    queue: tuple[Player, ...],
+    pick_deadline: float = 1_030.0,  # turn opened at 1_000 (30s clock)
+) -> DraftState:
+    return DraftState(
+        config=Config(mode="snake"), commissioner_id=1, phase="snake",
+        managers=managers, queue=queue, pick_deadline=pick_deadline,
+    )
+
+
+def test_cpu_decide_snake_skips_unaffordable_star_for_best_feasible():
+    # Two-manager snake (h,c | c,h | h,c ...): human has 3 picks, the CPU 2
+    # ($5+$4 spent -> $6 left, 3 empty), so pick #6 is the CPU's. Jordan's
+    # $5 tier would leave $1 for 2 empty slots -> infeasible; best 4★ wins,
+    # with the bigger combined stat line breaking the star tie.
+    human = Manager(
+        user_id=1, name="Chris", budget=3,
+        spots=_snake_spots(
+            _rated("h1", "PG", 5), _rated("h2", "SG", 4), _rated("h3", "SF", 3)
+        ),
+    )
+    cpu_m = Manager(
+        user_id=-1, name="CPU 1", budget=6,
+        spots=_snake_spots(_rated("c1", "PG", 5), _rated("c2", "SG", 4)),
+        cpu=True,
+    )
+    barkley = Player(
+        id="barkley", name="Charles Barkley", team="PHX", pos="PF",
+        ppg=25.0, rpg=12.0, apg=4.0, stars=4,
+    )
+    weak4 = Player(
+        id="weak4", name="Weak Four", team="TST", pos="C",
+        ppg=15.0, rpg=8.0, apg=2.0, stars=4,
+    )
+    state = _snake_state((human, cpu_m), (JORDAN, weak4, barkley))
+    event, _ = cpu.decide(state, -1, now=1_005.0)
+    assert event == Pick(-1, "barkley", 1_005.0)
+    # Right after the turn opens, it thinks for a beat first (~2s in).
+    event2, delay2 = cpu.decide(state, -1, now=1_000.5)
+    assert event2 is None and delay2 == pytest.approx(1.5)
+
+
+def test_cpu_decide_snake_waits_off_turn():
+    human = Manager(user_id=1, name="Chris", budget=15, spots=_empty_spots())
+    state = _snake_state((human, _cpu_manager(1, budget=15)), (JORDAN,))
+    event, delay = cpu.decide(state, -1, now=1_005.0)
+    assert event is None and delay == cpu.IDLE_DELAY
+
+
+def test_cpu_decide_snake_stranded_returns_none():
+    # $1 left with 2 empty slots: even a $1 pick breaks the $1-per-slot
+    # reserve, so nothing is feasible. The CPU sits; the engine's forced
+    # bargain resolves the turn at the timer.
+    cpu_m = Manager(
+        user_id=-1, name="CPU 1", budget=1,
+        spots=_snake_spots(
+            _rated("c1", "PG", 5), _rated("c2", "SG", 5), _rated("c3", "SF", 4)
+        ),
+        cpu=True,
+    )
+    state = _snake_state((cpu_m,), (JORDAN, _rated("scrub", "C", 1)))
+    event, _ = cpu.decide(state, -1, now=1_010.0)  # well past the think beat
+    assert event is None
+
+
 def _lineup_state(spots: tuple[Spot, ...]) -> DraftState:
     m = Manager(user_id=-1, name="CPU 1", budget=0, spots=spots, cpu=True)
     return DraftState(

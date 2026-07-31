@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 
 SLOTS: tuple[str, ...] = ("PG", "SG", "SF", "PF", "C")
 
+SNAKE_BUDGET: int = 15  # hard-coded snake-mode budget: exactly one player
+# from every tier ($5+$4+$3+$2+$1) — stacking $5 stars forces bargain picks.
+
 
 # ---------------------------------------------------------------- core data
 
@@ -28,6 +31,11 @@ class Player:
     decade: int = 2020  # anchor decade of their prime: 1960..2020
     prime: str = ""  # display range, e.g. "1989–1993"
     rank: int = 10  # 1-10 caliber rank within decade+position (1 = best)
+
+
+def snake_price(p: Player) -> int:
+    """Snake-mode sticker price: the 1-5 star tier IS the dollar tier."""
+    return p.stars
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,8 @@ class Config:
     lineup_seconds: int = 60  # arrange-your-lineup window before completion; 0 skips it
     sim: str = "prompt"  # "prompt" (copy-paste prompt for your own LLM, default)
     # | "off" | "stats" (pure stat ranking) | "ai" (stats + weighted LLM ranking)
+    mode: str = "auction"  # | "blind" (auction, names hidden until rostered)
+    # | "snake" (open pool, $15 budget, $1-$5 tier prices, snaking turn order)
 
 
 @dataclass(frozen=True)
@@ -115,7 +125,8 @@ class LogEntry:
 class DraftState:
     config: Config
     commissioner_id: int
-    phase: str = "lobby"  # lobby | auction | free_pick | lineup | complete | cancelled
+    phase: str = "lobby"  # lobby | auction | snake | free_pick | lineup
+    # | complete | cancelled ("blind" mode runs the auction phase)
     managers: tuple[Manager, ...] = ()
     queue: tuple[Player, ...] = ()  # hidden upcoming players; head is next up
     passed_ids: frozenset = field(default_factory=frozenset)  # passed once
@@ -181,8 +192,8 @@ class TimerExpired:
     was armed with — the engine ignores the event unless it matches current
     state (stale-timer guard)."""
 
-    kind: str  # "lot" | "pick" | "lineup"
-    lot_seq: int  # -1 for kind="pick"
+    kind: str  # "lot" | "pick" | "snake" | "lineup"
+    lot_seq: int  # -1 for kind="pick" / "snake" / "lineup"
     deadline: float
     now: float
 
@@ -340,6 +351,12 @@ class LotteryRevealFx:  # showdown resolved — followed by a SoldFx
 
 
 @dataclass(frozen=True)
+class SnakeTurnFx:  # snake mode — this manager is now on the clock
+    manager_id: int
+    deadline: float
+
+
+@dataclass(frozen=True)
 class LineupPhaseFx:  # all rosters full — arrange-lineup window is open
     deadline: float
 
@@ -400,7 +417,8 @@ class LobbyFx:  # lobby membership changed; re-render the lobby message
 Effect = (
     LotOpened | BidPlaced | SoldFx | PassedFx | ForceAssignedFx | FreePickFx
     | PickedFx | AutoFilledFx | LotteryOpenedFx | LotteryJoinedFx
-    | LotteryGuessedFx | LotteryCancelledFx | LotteryRevealFx | LineupPhaseFx
+    | LotteryGuessedFx | LotteryCancelledFx | LotteryRevealFx | SnakeTurnFx
+    | LineupPhaseFx
     | CompleteFx | ArmTimerFx | CancelTimerFx | BoardFx | ErrorFx
     | AutopilotFx | PausedFx | ResumedFx | CancelledFx | LobbyFx
 )

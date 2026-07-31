@@ -22,6 +22,7 @@ from .models import (
     Pick,
     Player,
     Swap,
+    snake_price,
 )
 
 IDLE_DELAY = 3.0  # nothing to do — poll again soon (keeps showdown entry live)
@@ -56,6 +57,8 @@ def _decide(
         return _auction_move(state, m, now)
     if state.phase == "free_pick":
         return _free_pick_move(state, m, now)
+    if state.phase == "snake":
+        return _snake_move(state, m, now)
     return None, IDLE_DELAY
 
 
@@ -154,4 +157,40 @@ def _free_pick_move(
     if now < act_at:
         return None, act_at - now
     best = max(state.queue, key=lambda p: (p.stars, p.ppg + p.rpg + p.apg))
+    return Pick(m.user_id, best.id, now), REACT_DELAY
+
+
+def _snake_on_turn_id(state: DraftState) -> int:
+    """Mirror of the engine's snake turn math: managers tuple order, snaking
+    back on odd rounds; picks made = filled roster spots."""
+    n = len(state.managers)
+    picks_made = sum(
+        1 for x in state.managers for s in x.spots if s.player is not None
+    )
+    r, i = divmod(picks_made, n)
+    turn = state.managers[i] if r % 2 == 0 else state.managers[n - 1 - i]
+    return turn.user_id
+
+
+def _snake_feasible(m: Manager, p: Player) -> bool:
+    """Mirror of the engine's rule: affordable AND leaves $1 for every other
+    still-empty slot."""
+    price = snake_price(p)
+    return price <= m.budget and m.budget - price >= m.empty_slots - 1
+
+
+def _snake_move(
+    state: DraftState, m: Manager, now: float
+) -> tuple[Event | None, float]:
+    if _snake_on_turn_id(state) != m.user_id:
+        return None, IDLE_DELAY
+    # Same think beat as the free pick: the engine armed lot_seconds ago.
+    act_at = state.pick_deadline - state.config.lot_seconds + PICK_THINK_SECONDS
+    if now < act_at:
+        return None, act_at - now
+    feasible = [p for p in state.queue if _snake_feasible(m, p)]
+    if not feasible:
+        # Stranded — the engine's forced bargain resolves it at the timer.
+        return None, IDLE_DELAY
+    best = max(feasible, key=lambda p: (p.stars, p.ppg + p.rpg + p.apg))
     return Pick(m.user_id, best.id, now), REACT_DELAY

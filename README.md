@@ -179,6 +179,20 @@ Live ticking countdowns, always-visible board, drag-to-rearrange lineups,
 and a one-click copy button for the tournament prompt. Architecture and
 wire protocol: `webapp/PROTOCOL.md`.
 
+### Hosting the web app
+
+One service, no build step, no database — any container host runs it as-is:
+
+```bash
+docker build -t nba-draft . && docker run -p 8000:8000 nba-draft
+```
+
+Render / Railway / Fly.io / Cloud Run all auto-detect the `Dockerfile`; the
+server honors `$PORT`. Rooms are in-memory (a restart clears live rooms), so
+run a single instance — no sticky sessions or Redis needed. For `sim: ai`
+mode set `LLM_API_KEY` (and optionally `LLM_BASE_URL`/`SIM_MODEL`); every
+other mode needs zero configuration.
+
 ## Refreshing the dataset
 
 `draftbot/data/players.json` is a generated static file (350 players — 50

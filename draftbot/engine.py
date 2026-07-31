@@ -12,6 +12,7 @@ from dataclasses import replace
 
 from .models import (
     SLOTS,
+    SNAKE_BUDGET,
     AddCpu,
     ArmTimerFx,
     AutoFilledFx,
@@ -55,11 +56,13 @@ from .models import (
     RemoveCpu,
     Resume,
     ResumedFx,
+    SnakeTurnFx,
     SoldFx,
     Spot,
     Start,
     Swap,
     TimerExpired,
+    snake_price,
 )
 
 Transition = tuple[DraftState, list[Effect]]
@@ -83,6 +86,8 @@ def apply(
     if isinstance(event, TimerExpired):
         if event.kind == "lot":
             return _lot_expired(state, event, r)
+        if event.kind == "snake":
+            return _snake_expired(state, event)
         if event.kind == "pick":
             return _pick_expired(state, event, r)
         if event.kind == "lineup":
@@ -91,6 +96,8 @@ def apply(
     if isinstance(event, LotteryGuess):
         return _lottery_guess(state, event)
     if isinstance(event, Pick):
+        if state.phase == "snake":
+            return _snake_pick(state, event)
         return _pick(state, event, r)
     if isinstance(event, Swap):
         return _swap(state, event)
@@ -193,7 +200,11 @@ def _assign(m: Manager, player: Player, price: int) -> Manager:
 
 def _join(state: DraftState, ev: Join) -> Transition:
     existing = state.manager(ev.user_id)
-    if state.phase in ("auction", "free_pick") and existing and existing.autopilot:
+    if (
+        state.phase in ("auction", "snake", "free_pick")
+        and existing
+        and existing.autopilot
+    ):
         if (
             state.phase == "free_pick"
             and not existing.full
@@ -233,7 +244,7 @@ def _leave(state: DraftState, ev: Leave) -> Transition:
     if state.phase == "lobby":
         managers = tuple(x for x in state.managers if x.user_id != ev.user_id)
         return replace(state, managers=managers), [LobbyFx()]
-    if state.phase in ("auction", "free_pick"):
+    if state.phase in ("auction", "snake", "free_pick"):
         if m.autopilot:
             return _err(state, ev.user_id, "You've already left this draft.")
         # Takes effect at the next lot resolution; a standing bid still pays
@@ -256,6 +267,14 @@ def _start(state: DraftState, ev: Start, rng: random.Random) -> Transition:
         )
     pool = build_pool(ev.players, len(state.managers), state.config, rng)
     managers = tuple(replace(m, last_action_lot=0) for m in state.managers)
+    if state.config.mode == "snake":
+        # Snake ignores config.budget: everyone gets the fixed $15 stack —
+        # spent evenly it buys exactly one player from every $1-$5 tier. The
+        # queue IS the open pool here (redaction is a view concern).
+        managers = tuple(replace(m, budget=SNAKE_BUDGET) for m in managers)
+        state2 = replace(state, phase="snake", managers=managers, queue=pool)
+        return _snake_advance(state2, ev.now, [BoardFx()])
+    # "blind" runs the auction flow untouched — hiding names is a view concern.
     state2 = replace(state, phase="auction", managers=managers, queue=pool)
     return _deal_lot(state2, ev.now)
 
@@ -593,6 +612,121 @@ def _pick_expired(
     return _auto_fill(replace(state, managers=tuple(managers)), ev.now, rng, fx)
 
 
+# -------------------------------------------------------------------- snake
+
+
+def _snake_on_turn(state: DraftState) -> Manager:
+    """Turn order: managers tuple order, snaking back on odd rounds."""
+    n = len(state.managers)
+    picks_made = sum(
+        1 for m in state.managers for s in m.spots if s.player is not None
+    )
+    r, i = divmod(picks_made, n)
+    return state.managers[i] if r % 2 == 0 else state.managers[n - 1 - i]
+
+
+def _snake_value(p: Player) -> tuple[int, float]:
+    """Autopick ranking: stars first, then combined prime stat line."""
+    return (p.stars, p.ppg + p.rpg + p.apg)
+
+
+def _snake_feasible(m: Manager, p: Player) -> bool:
+    """Affordable AND leaves $1 for every other still-empty slot."""
+    price = snake_price(p)
+    return price <= m.budget and m.budget - price >= m.empty_slots - 1
+
+
+def _snake_resolve(state: DraftState, m: Manager) -> Transition:
+    """Resolve ``m``'s turn without them: best feasible pick, else a forced
+    bargain (cheapest tier, charged only what's left) — never a deadlock."""
+    feasible = [p for p in state.queue if _snake_feasible(m, p)]
+    if feasible:
+        player = max(feasible, key=_snake_value)
+        price = snake_price(player)
+        kind = "pick"
+        fx: list[Effect] = [PickedFx(player, m.user_id), BoardFx()]
+    else:
+        cheapest = min(snake_price(p) for p in state.queue)
+        bargains = [p for p in state.queue if snake_price(p) == cheapest]
+        player = max(bargains, key=_snake_value)
+        price = min(cheapest, m.budget)  # a stub budget pays what it can
+        kind = "force"
+        fx = [ForceAssignedFx(player, m.user_id), BoardFx()]
+    state2 = replace(
+        _with_manager(state, _assign(m, player, price)),
+        queue=tuple(p for p in state.queue if p.id != player.id),
+        log=state.log + (LogEntry(kind, player, m.user_id, price),),
+    )
+    return state2, fx
+
+
+def _snake_advance(
+    state: DraftState, now: float, fx: list[Effect]
+) -> Transition:
+    """After every resolved pick: burn through managers who can't (or won't)
+    choose — autopilot teams and teams with no feasible pick resolve on the
+    spot — then arm the next live manager's clock, or finish on empty pool."""
+    while state.queue:
+        m = _snake_on_turn(state)
+        if not m.autopilot and any(_snake_feasible(m, p) for p in state.queue):
+            deadline = now + state.config.lot_seconds
+            state2 = replace(state, pick_deadline=deadline)
+            return state2, fx + [
+                SnakeTurnFx(m.user_id, deadline),
+                ArmTimerFx("snake", -1, deadline),
+            ]
+        state, more = _snake_resolve(state, m)
+        fx = fx + more
+    return _finish(state, now, fx)
+
+
+def _snake_pick(state: DraftState, ev: Pick) -> Transition:
+    uid = ev.user_id
+    if state.paused:
+        return _err(state, uid, "The draft is paused.")
+    m = _snake_on_turn(state)
+    if m.user_id != uid:
+        return _err(state, uid, "It's not your pick.")
+    if m.autopilot:  # left/kicked while on the clock — mirror _bid's gate
+        return _err(state, uid, "You're on autopilot — reclaim your team to pick.")
+    player = next((p for p in state.queue if p.id == ev.player_id), None)
+    if player is None:
+        return _err(state, uid, "That player isn't in the pool.")
+    price = snake_price(player)
+    if price > m.budget:
+        return _err(
+            state, uid, f"That's a ${price} player — you've only got ${m.budget}."
+        )
+    reserve = m.empty_slots - 1
+    if m.budget - price < reserve:
+        return _err(
+            state,
+            uid,
+            f"${price} would leave you ${m.budget - price}, but you need to "
+            f"keep $1 for each of your {reserve} other empty slot(s).",
+        )
+    m2 = replace(_assign(m, player, price), last_action_lot=state.lot_seq)
+    state2 = replace(
+        _with_manager(state, m2),
+        queue=tuple(p for p in state.queue if p.id != ev.player_id),
+        log=state.log + (LogEntry("pick", player, uid, price),),
+    )
+    return _snake_advance(state2, ev.now, [PickedFx(player, uid), BoardFx()])
+
+
+def _snake_expired(state: DraftState, ev: TimerExpired) -> Transition:
+    # Stale guard, same shape as "pick": phase + deadline echo must match.
+    if (
+        state.phase != "snake"
+        or state.paused
+        or ev.deadline != state.pick_deadline
+    ):
+        return state, []
+    # The idler keeps their team (no autopilot flip) — this turn autopicks.
+    state2, fx = _snake_resolve(state, _snake_on_turn(state))
+    return _snake_advance(state2, ev.now, fx)
+
+
 # ------------------------------------------------------------------- lineup
 
 
@@ -612,7 +746,7 @@ def _swap(state: DraftState, ev: Swap) -> Transition:
     m = state.manager(ev.user_id)
     if m is None:
         return _err(state, ev.user_id, "You're not in this draft.")
-    if state.phase not in ("auction", "free_pick", "lineup"):
+    if state.phase not in ("auction", "snake", "free_pick", "lineup"):
         return _err(state, ev.user_id, "You can only swap during the draft.")
     slots = state.config.slots
     if ev.slot_a not in slots or ev.slot_b not in slots or ev.slot_a == ev.slot_b:
@@ -637,7 +771,7 @@ def _pause(state: DraftState, ev: Pause) -> Transition:
         return _err(
             state, ev.user_id, "The draft is wrapping up — lineups lock shortly."
         )
-    if state.phase not in ("auction", "free_pick"):
+    if state.phase not in ("auction", "snake", "free_pick"):
         return _err(state, ev.user_id, "There's nothing to pause.")
     if state.paused:
         return _err(state, ev.user_id, "The draft is already paused.")
@@ -668,7 +802,8 @@ def _resume(state: DraftState, ev: Resume) -> Transition:
     state2 = replace(
         state, paused=False, pause_remaining=0.0, pick_deadline=deadline
     )
-    return state2, [ResumedFx(None), ArmTimerFx("pick", -1, deadline)]
+    kind = "snake" if state.phase == "snake" else "pick"
+    return state2, [ResumedFx(None), ArmTimerFx(kind, -1, deadline)]
 
 
 def _kick(state: DraftState, ev: Kick) -> Transition:

@@ -43,6 +43,7 @@ registry = RoomRegistry()
 
 SIM_MODES = ("prompt", "off", "stats", "ai")
 POOL_DEPTHS = ("legends", "household", "deep")
+DRAFT_MODES = ("auction", "blind", "snake")
 MAX_NAME_LENGTH = 32
 
 
@@ -110,6 +111,9 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
     pool_depth = body.get("pool_depth", "legends")
     if pool_depth not in POOL_DEPTHS:
         raise _bad(f"pool_depth must be one of: {', '.join(POOL_DEPTHS)}.")
+    mode = body.get("mode", "auction")
+    if mode not in DRAFT_MODES:
+        raise _bad(f"mode must be one of: {', '.join(DRAFT_MODES)}.")
     config = Config(
         budget=budget,
         lot_seconds=clock,
@@ -118,6 +122,7 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
         era_end=era_to,
         pool_depth=pool_depth,
         sim=sim_mode,
+        mode=mode,
     )
     room, token, user_id = registry.create_room(config, name)
     if cpus:
@@ -159,12 +164,15 @@ async def room_summary(code: str) -> dict[str, Any]:
 
 @app.post("/api/rooms/{code}/simulate")
 async def simulate(code: str, body: dict = Body(...)) -> dict[str, Any]:
-    """/simulate parity: complete drafts only, draft members only, re-runs
+    """/simulate parity: commissioner only, complete drafts only, re-runs
     per the room's configured mode."""
     room = _room_or_404(code)
     token = body.get("token")
-    if not isinstance(token, str) or token not in room.tokens:
-        raise HTTPException(status_code=403, detail="Only draft members can simulate.")
+    user_id = room.tokens.get(token) if isinstance(token, str) else None
+    if user_id != room.state.commissioner_id:
+        raise HTTPException(
+            status_code=403, detail="Only the commissioner can simulate."
+        )
     state = room.state
     if state.phase != "complete":
         raise _bad("The sim runs after the draft completes.")
@@ -215,15 +223,20 @@ def _build_event(
     if action == "bid":
         amount = data.get("amount")
         increment = data.get("increment")
-        if amount is not None and not isinstance(amount, int):
+        # bool is an int subclass — JSON true must not read as a $1 bid.
+        if amount is not None and (
+            not isinstance(amount, int) or isinstance(amount, bool)
+        ):
             return None
-        if amount is None and not isinstance(increment, int):
+        if amount is None and (
+            not isinstance(increment, int) or isinstance(increment, bool)
+        ):
             return None
         raw_seq = data.get("lot_seq")
         lot = room.state.lot
         lot_seq = (
             raw_seq
-            if isinstance(raw_seq, int)
+            if isinstance(raw_seq, int) and not isinstance(raw_seq, bool)
             else (lot.seq if lot is not None else -1)
         )
         return Bid(
@@ -241,7 +254,7 @@ def _build_event(
         lot = room.state.lot
         lot_seq = (
             raw_seq
-            if isinstance(raw_seq, int)
+            if isinstance(raw_seq, int) and not isinstance(raw_seq, bool)
             else (lot.seq if lot is not None else -1)
         )
         return LotteryGuess(user_id=actor, lot_seq=lot_seq, guess=number, now=now)
@@ -249,6 +262,18 @@ def _build_event(
         player_id = data.get("player_id")
         if not isinstance(player_id, str):
             return None
+        if room.state.config.mode == "blind":
+            # Blind free-pick cards carry opaque aliases — ONLY aliases may
+            # resolve (a guessed real slug must not let a client snipe a
+            # masked player by name); no match -> the engine rejects it.
+            player_id = next(
+                (
+                    p.id
+                    for p in room.state.queue
+                    if views.blind_alias(room.blind_salt, p.id) == player_id
+                ),
+                "",
+            )
         return Pick(actor, player_id, now)
     if action == "swap":
         slot_a, slot_b = data.get("a"), data.get("b")
@@ -325,7 +350,11 @@ async def ws_room(ws: WebSocket, code: str) -> None:
     room.last_active = time.time()
     try:
         await ws.send_json(
-            {"type": "state", "state": views.state_view(room.state, viewer_id)}
+            {
+                "type": "state",
+                "now": time.time(),
+                "state": views.state_view(room.state, viewer_id, room.blind_salt),
+            }
         )
         while True:
             raw = await ws.receive_text()

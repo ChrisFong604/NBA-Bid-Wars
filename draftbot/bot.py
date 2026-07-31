@@ -864,10 +864,10 @@ def register_commands(bot: DraftBot) -> None:
                 arm = ("lot", lot.seq, lot.deadline)
                 bot._arm_timer(session, *arm)  # commit-time, under the lock
                 await bot._save(session)
-            elif state.phase == "free_pick":
+            elif state.phase in ("free_pick", "snake"):
                 deadline = state.pick_deadline + seconds
                 session.state = replace(state, pick_deadline=deadline)
-                arm = ("pick", -1, deadline)
+                arm = ("pick" if state.phase == "free_pick" else "snake", -1, deadline)
                 bot._arm_timer(session, *arm)  # commit-time, under the lock
                 await bot._save(session)
             else:
@@ -1037,10 +1037,8 @@ def register_commands(bot: DraftBot) -> None:
         choices: list[app_commands.Choice[str]] = []
         for p in session.state.queue:
             if needle in p.name.lower():
-                label = (
-                    f"{p.name} — {p.pos} · {p.team} · "
-                    f"{ui.decade_tag(p.decade)} · {p.stars}⭐"
-                )
+                # Stars are data-only and must never render to players.
+                label = f"{p.name} — {p.pos} · {p.team} · {ui.decade_tag(p.decade)}"
                 choices.append(app_commands.Choice(name=label[:100], value=p.id))
                 if len(choices) == 25:
                     break

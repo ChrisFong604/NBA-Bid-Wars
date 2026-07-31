@@ -39,6 +39,8 @@ log = logging.getLogger("webapp")
 ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 ROOM_CODE_LENGTH = 4
 ROOM_TTL_SECONDS = 3600.0
+# Phases where humans are mid-game — the sweep must never strand them.
+LIVE_PHASES = ("auction", "free_pick", "snake", "lineup")
 
 
 class JoinError(Exception):
@@ -70,6 +72,8 @@ class Room:
     next_user_id: int = 1
     created: float = field(default_factory=time.time)
     last_active: float = field(default_factory=time.time)
+    # Per-room salt for blind-mode masked-card wire ids (views.blind_alias).
+    blind_salt: str = field(default_factory=lambda: secrets.token_hex(8))
 
 
 class RoomRegistry:
@@ -120,17 +124,37 @@ class RoomRegistry:
 
     def _sweep(self) -> None:
         """Evict rooms idle past the TTL (covers finished drafts and dead
-        lobbies; live drafts refresh ``last_active`` on every timer fire)."""
+        lobbies). A live draft is never evicted while paused (paused rooms
+        stop refreshing ``last_active``) or while any socket is connected;
+        evicted rooms close their sockets so no client plays a ghost room."""
         now = time.time()
         for code, room in list(self.rooms.items()):
-            if now - room.last_active > ROOM_TTL_SECONDS:
-                if room.timer_task is not None:
-                    room.timer_task.cancel()
-                if room.sim_task is not None:
-                    room.sim_task.cancel()
-                if room.cpu_task is not None:
-                    room.cpu_task.cancel()
-                del self.rooms[code]
+            if now - room.last_active <= ROOM_TTL_SECONDS:
+                continue
+            if room.state.phase in LIVE_PHASES and (
+                room.state.paused or room.sockets
+            ):
+                continue
+            for task in (room.timer_task, room.sim_task, room.cpu_task):
+                if task is not None:
+                    task.cancel()
+            del self.rooms[code]
+            if room.sockets:
+                self._spawn(self._close_sockets(room))
+
+    async def _close_sockets(self, room: Room) -> None:
+        for ws in list(room.sockets):
+            room.sockets.pop(ws, None)
+            try:
+                await ws.send_json(
+                    {
+                        "type": "error",
+                        "message": "This room has expired — start a new draft.",
+                    }
+                )
+                await ws.close()
+            except Exception:
+                pass  # dead socket — eviction proceeds regardless
 
     # ------------------------------------------------------------- dispatch
 
@@ -215,10 +239,13 @@ class RoomRegistry:
                 lot = replace(state.lot, deadline=state.lot.deadline + seconds)
                 room.state = replace(state, lot=lot)
                 self._arm_timer(room, "lot", lot.seq, lot.deadline)
-            elif state.phase == "free_pick":
+            elif state.phase in ("free_pick", "snake"):
+                # Both phases clock off pick_deadline; the timer kind must
+                # match what the engine armed or the expiry event is stale.
                 deadline = state.pick_deadline + seconds
                 room.state = replace(state, pick_deadline=deadline)
-                self._arm_timer(room, "pick", -1, deadline)
+                kind = "snake" if state.phase == "snake" else "pick"
+                self._arm_timer(room, kind, -1, deadline)
             else:
                 return "There's no live timer to extend."
             room.last_active = time.time()
@@ -234,7 +261,7 @@ class RoomRegistry:
         cancelled on eviction."""
         if room.cpu_task is not None and not room.cpu_task.done():
             return
-        if room.state.phase not in ("auction", "free_pick", "lineup"):
+        if room.state.phase not in LIVE_PHASES:
             return
         if not any(m.cpu for m in room.state.managers):
             return
@@ -244,8 +271,10 @@ class RoomRegistry:
         """Poll each CPU brain OUTSIDE the lock (room.state is an immutable
         snapshot) and submit its chosen events through the normal dispatch —
         the engine stays the single authority; stale decisions just bounce
-        off its guards like any late human click."""
-        while room.state.phase in ("auction", "free_pick", "lineup"):
+        off its guards like any late human click. Runs through every live
+        phase; during snake the brain currently sits idle and CPU turns
+        resolve by the engine's turn-timer autopick."""
+        while room.state.phase in LIVE_PHASES:
             delays = [cpu.IDLE_DELAY]
             for m in room.state.managers:
                 if not m.cpu:
@@ -259,15 +288,27 @@ class RoomRegistry:
     # ------------------------------------------------------------ broadcast
 
     async def _broadcast_state(self, room: Room) -> None:
-        """Full per-viewer state view to every socket after a commit."""
+        """Full per-viewer state view to every socket after a commit. The
+        top-level ``now`` (server epoch seconds) lets clients compute a
+        clock offset for countdown rendering."""
         state = room.state
+        now = time.time()
         for ws, viewer_id in list(room.sockets.items()):
             await self._send(
-                room, ws, {"type": "state", "state": views.state_view(state, viewer_id)}
+                room,
+                ws,
+                {
+                    "type": "state",
+                    "now": now,
+                    "state": views.state_view(state, viewer_id, room.blind_salt),
+                },
             )
 
     async def _send_effects(self, room: Room, effects: list[Effect]) -> None:
-        payloads = [v for fx in effects if (v := views.fx_view(fx)) is not None]
+        mode = room.state.config.mode  # fixed at creation — safe post-commit
+        payloads = [
+            v for fx in effects if (v := views.fx_view(fx, mode)) is not None
+        ]
         if payloads:
             await self._broadcast(room, {"type": "fx", "fx": payloads})
         for fx in effects:
