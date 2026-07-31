@@ -3,197 +3,478 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NBA Draft Night</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏀</text></svg>">
+<title>NBA Bid War</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23f5b73c'/><text x='50' y='72' font-size='64' text-anchor='middle' font-family='monospace' font-weight='bold' fill='%230c0b0e'>$</text></svg>">
+<link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-<div id="conn" hidden>📡 Reconnecting…</div>
+<div id="conn" hidden>Reconnecting…</div>
 
 <!-- ============================================================ HOME -->
 <main id="home">
-  <h1 class="app-title">🏀 NBA Draft Night</h1>
-  <p class="tagline muted">Blind-auction fantasy drafts across every era since 1960.</p>
-  <div class="home-panels">
-    <section class="panel">
-      <h2>Create a room</h2>
-      <form id="create-form">
-        <label>Your name
-          <input id="c-name" type="text" maxlength="32" required autocomplete="nickname" placeholder="e.g. Chris">
-        </label>
-        <label>Game mode
-          <select id="c-mode">
-            <option value="auction" selected>Auction (classic)</option>
-            <option value="blind">Blind auction — mystery players</option>
-            <option value="snake">Snake draft — $15, $1–$5 tiers</option>
-          </select>
-        </label>
-        <div class="field-row">
-          <label>Budget $
-            <input id="c-budget" type="number" value="20" min="1" max="1000" step="1" required>
-          </label>
-          <label>Clock (s)
-            <input id="c-clock" type="number" value="30" min="15" max="300" step="1" required>
-          </label>
-          <label>Lineup (s)
-            <input id="c-lineup" type="number" value="60" min="0" max="300" step="1" required>
-          </label>
-          <label>CPU opponents
-            <input id="c-cpus" type="number" value="0" min="0" max="8" step="1" required>
-          </label>
+  <div class="home-inner">
+    <div class="home-header">
+      <div class="brand">
+        <div class="brand-mark">$</div>
+        <span class="brand-name">NBA Bid War</span>
+      </div>
+      <div class="home-facts">
+        <span>No accounts</span><span>2–10 managers</span><span>~6 min a game</span>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-pill"><span class="dot"></span>1,204 lots sold today</div>
+      <h1>Draft five legends.<br><span class="gold">Any era.</span> Burn your budget.</h1>
+      <p class="hero-deck">A live auction house crossed with your group chat. Twenty
+        seconds to decide whether '92 Jordan is worth half your bankroll. No ratings,
+        no grades — if you don't know who's good, that's the game.</p>
+    </div>
+
+    <div class="home-grid">
+      <section class="create-card">
+        <div class="create-head">
+          <div class="card-title">Open a room</div>
+          <div class="commish-note">You'll be commissioner 👑</div>
         </div>
-        <p id="c-budget-note" class="muted small" hidden>$15 fixed — one player from every tier is exactly $15</p>
-        <div class="field-row">
-          <label>Era from
-            <select id="c-era-from">
-              <option value="1960">1960s</option>
-              <option value="1970">1970s</option>
-              <option value="1980">1980s</option>
-              <option value="1990">1990s</option>
-              <option value="2000" selected>2000s</option>
-              <option value="2010">2010s</option>
-              <option value="2020">2020s</option>
-            </select>
-          </label>
-          <label>Era to
-            <select id="c-era-to">
-              <option value="1960">1960s</option>
-              <option value="1970">1970s</option>
-              <option value="1980">1980s</option>
-              <option value="1990">1990s</option>
-              <option value="2000">2000s</option>
-              <option value="2010">2010s</option>
-              <option value="2020" selected>2020s</option>
-            </select>
-          </label>
-          <label>Player pool
-            <select id="c-pool">
-              <option value="legends" selected>Legends only</option>
-              <option value="household">Household names</option>
-              <option value="deep">Deep (stars + role players)</option>
-            </select>
-          </label>
-          <label>Sim mode
-            <select id="c-sim">
-              <option value="prompt" selected>Prompt (copy for your LLM)</option>
-              <option value="stats">Stats ranking</option>
-              <option value="ai">AI ranking</option>
-              <option value="off">Off</option>
-            </select>
-          </label>
-        </div>
-        <button type="submit" class="primary">🚀 Create room</button>
-      </form>
-    </section>
-    <section class="panel">
-      <h2>Join a room</h2>
-      <form id="join-form">
-        <label>Your name
-          <input id="j-name" type="text" maxlength="32" required autocomplete="nickname" placeholder="e.g. Jordan">
-        </label>
-        <label>Room code
-          <input id="j-code" type="text" maxlength="4" required placeholder="K7QX" class="code-input" autocapitalize="characters" autocomplete="off" spellcheck="false">
-        </label>
-        <button type="submit" class="primary">🎟️ Join room</button>
-      </form>
-      <p class="muted small">Got a link like <span class="code-inline">/#K7QX</span>? The code fills in for you.</p>
-    </section>
+        <form id="create-form" class="create-body">
+          <div class="eyebrow">Game mode</div>
+          <div class="mode-tiles">
+            <button type="button" class="mode-tile selected" data-mode="auction">
+              <span class="mt-title">Auction</span>
+              <span class="mt-desc">Classic. Hidden queue, one lot at a time.</span>
+            </button>
+            <button type="button" class="mode-tile" data-mode="blind">
+              <span class="mt-title">Blind auction</span>
+              <span class="mt-desc">Stat line only. Guess the man.</span>
+            </button>
+            <button type="button" class="mode-tile" data-mode="snake">
+              <span class="mt-title">Snake draft</span>
+              <span class="mt-desc">$15 fixed, $1–$5 price tiers.</span>
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="settings-grid">
+            <div>
+              <div class="field-head">
+                <span class="eyebrow">Display name</span>
+              </div>
+              <input id="c-name" class="text-input" type="text" maxlength="32" required
+                autocomplete="nickname" placeholder="Your display name">
+            </div>
+            <div>
+              <div class="field-head">
+                <span class="eyebrow">Budget</span>
+                <span id="c-budget-val" class="field-val">$20</span>
+              </div>
+              <div id="c-budget-controls" class="range-row">
+                <input id="c-budget-range" type="range" min="1" max="1000" value="20">
+                <input id="c-budget" class="num-input" type="number" min="1" max="1000" step="1" value="20">
+              </div>
+              <div id="c-budget-note" class="budget-lock" hidden>
+                <strong>LOCK</strong>$15 fixed — one player from every tier is exactly $15.
+              </div>
+            </div>
+            <div>
+              <div class="field-head">
+                <span class="eyebrow">Clock per lot</span>
+                <span id="c-clock-val" class="field-val">30s</span>
+              </div>
+              <div class="range-row">
+                <input id="c-clock-range" type="range" min="15" max="300" step="5" value="30">
+                <input id="c-clock" class="num-input" type="number" min="15" max="300" step="1" value="30">
+              </div>
+            </div>
+            <div>
+              <div class="field-head"><span class="eyebrow">Era range</span></div>
+              <div class="era-row">
+                <select id="c-era-from">
+                  <option value="1960">1960s</option>
+                  <option value="1970">1970s</option>
+                  <option value="1980">1980s</option>
+                  <option value="1990">1990s</option>
+                  <option value="2000" selected>2000s</option>
+                  <option value="2010">2010s</option>
+                  <option value="2020">2020s</option>
+                </select>
+                <span class="era-arrow">→</span>
+                <select id="c-era-to">
+                  <option value="1960">1960s</option>
+                  <option value="1970">1970s</option>
+                  <option value="1980">1980s</option>
+                  <option value="1990">1990s</option>
+                  <option value="2000">2000s</option>
+                  <option value="2010">2010s</option>
+                  <option value="2020" selected>2020s</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <div class="field-head"><span class="eyebrow">Pool depth</span></div>
+              <div class="pill-grid depth">
+                <button type="button" class="pill-btn selected" data-depth="legends">Legends<span class="sub">~20/era</span></button>
+                <button type="button" class="pill-btn" data-depth="household">Household<span class="sub">~35/era</span></button>
+                <button type="button" class="pill-btn" data-depth="deep">Deep<span class="sub">~50/era</span></button>
+              </div>
+            </div>
+            <div>
+              <div class="field-head">
+                <span class="eyebrow">Lineup window</span>
+                <span id="c-lineup-val" class="field-val">60s</span>
+              </div>
+              <input id="c-lineup" type="range" min="0" max="300" step="10" value="60">
+            </div>
+            <div>
+              <div class="field-head">
+                <span class="eyebrow">CPU opponents</span>
+                <span id="c-cpus-val" class="field-val">2</span>
+              </div>
+              <input id="c-cpus" type="range" min="0" max="8" step="1" value="2">
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="eyebrow" style="margin-bottom:11px">How the tournament gets settled</div>
+          <div class="pill-grid sim">
+            <button type="button" class="pill-btn selected" data-sim="prompt">Prompt for your own LLM</button>
+            <button type="button" class="pill-btn" data-sim="stats">Stats only</button>
+            <button type="button" class="pill-btn" data-sim="ai">AI + stats</button>
+            <button type="button" class="pill-btn" data-sim="off">Off</button>
+          </div>
+
+          <button type="submit" class="cta create-cta">Create room →</button>
+          <div id="create-summary" class="create-summary"></div>
+          <div id="home-toast-create"></div>
+        </form>
+      </section>
+
+      <div class="home-right">
+        <section class="join-card">
+          <div class="card-title">Got a code?</div>
+          <div class="join-hint">Four letters from whoever's running it.</div>
+          <form id="join-form">
+            <input id="j-code" class="code-input" type="text" maxlength="4" required
+              placeholder="XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false">
+            <input id="j-name" class="text-input" type="text" maxlength="32" required
+              autocomplete="nickname" placeholder="Your display name">
+            <button type="submit" class="join-cta">Join the room</button>
+          </form>
+          <div id="home-toast-join"></div>
+          <div class="join-note">Anyone with the link can watch read-only. No sign-up, ever.</div>
+        </section>
+
+        <section class="rules-card">
+          <div class="rules-title">Three rules that matter</div>
+          <div class="rule"><span class="rule-num">1</span><span class="rule-text">The pool is
+            exactly 5 players per manager and drains to zero. Someone is going home with
+            Bruce Bowen.</span></div>
+          <div class="rule"><span class="rule-num">2</span><span class="rule-text">Any player
+            fits any slot. A center can run your point.</span></div>
+          <div class="rule"><span class="rule-num">3</span><span class="rule-text">Last manager
+            with money left picks whoever's left, free. Hoarding is a strategy.</span></div>
+        </section>
+      </div>
+    </div>
   </div>
 </main>
 
 <!-- =========================================================== LOBBY -->
 <main id="lobby" hidden>
-  <div class="panel lobby-panel">
-    <h1>🏀 Lobby</h1>
-    <div class="code-row">
-      <span id="lobby-code" class="code big"></span>
-      <button id="btn-copylink" class="ghost">🔗 Copy link</button>
+  <div class="lobby-inner">
+    <div class="lobby-header">
+      <div class="brand">
+        <div class="brand-mark">$</div>
+        <span class="brand-name">NBA Bid War</span>
+      </div>
+      <div class="actions">
+        <button id="btn-lobby-cancel" class="ghost-btn danger" hidden>Cancel room</button>
+        <button id="btn-leave" class="ghost-btn">Leave room</button>
+      </div>
     </div>
-    <p id="lobby-cfg" class="muted"></p>
-    <h3>Managers</h3>
-    <ul id="lobby-mgrs" class="mgr-list"></ul>
-    <div class="row">
-      <button id="btn-start" class="primary" hidden>▶️ Start draft</button>
-      <button id="btn-addcpu" class="ghost" hidden>🤖 Add CPU</button>
-      <button id="btn-lobby-cancel" class="danger" hidden>✖ Cancel room</button>
-      <button id="btn-leave" class="ghost">🚪 Leave</button>
+
+    <div class="lobby-grid">
+      <div>
+        <div class="lobby-title-row">
+          <div>
+            <div id="lobby-eyebrow"></div>
+            <h1>The floor is filling up</h1>
+          </div>
+          <div id="lobby-count"></div>
+        </div>
+
+        <div class="mgr-card">
+          <div id="lobby-rows"></div>
+          <div id="lobby-footer" class="mgr-footer">
+            <button id="btn-addcpu" type="button">+ Add a CPU 🤖</button>
+            <div class="waiting-plate">waiting for humans<span class="ellipsis">…</span></div>
+          </div>
+        </div>
+
+        <button id="lobby-start" class="cta" hidden></button>
+        <div id="lobby-wait" hidden>Waiting on the commissioner to drop the gavel…</div>
+        <div id="lobby-toast"></div>
+      </div>
+
+      <div class="lobby-right">
+        <div class="code-card">
+          <span class="eyebrow">Room code</span>
+          <div id="lobby-code"></div>
+          <button id="btn-copylink" type="button">Copy invite link</button>
+          <div id="lobby-url"></div>
+        </div>
+        <div class="settings-card">
+          <span class="eyebrow">Settings</span>
+          <div id="lobby-settings"></div>
+        </div>
+      </div>
     </div>
-    <p class="muted small">Share the link — the draft needs at least 2 managers.</p>
   </div>
 </main>
 
 <!-- ============================================================ GAME -->
 <main id="game" hidden>
-  <header id="game-header">
-    <div id="gh-left">
-      <span id="gh-code" class="code"></span>
-      <span id="gh-phase" class="badge"></span>
-      <span id="gh-pool" class="muted small"></span>
+  <div id="topbar">
+    <div class="brand">
+      <div class="brand-mark">$</div>
+      <span class="brand-name">NBA Bid War</span>
     </div>
-    <div id="gh-controls">
-      <button id="btn-share" class="ghost small-btn" title="Copy room link">🔗</button>
-      <span id="commish-controls" hidden>
-        <button id="btn-pause">⏸ Pause</button>
-        <button id="btn-addtime">⏱ +30s</button>
-        <button id="btn-cancel" class="danger">✖ Cancel</button>
-      </span>
+    <div class="room-chip">
+      <span class="lbl">Room</span>
+      <span id="gh-code"></span>
     </div>
-  </header>
-  <div id="reclaim-bar" hidden>
-    <span>💤 Your team is on autopilot — a bot is bidding for you.</span>
-    <button id="btn-reclaim" class="primary">🔁 Reclaim my team</button>
+    <div id="gh-mode"></div>
+    <div class="topbar-spacer"></div>
+    <div id="gh-queue"></div>
+    <div id="commish-cluster" hidden>
+      <span class="lbl">Commish</span>
+      <button id="btn-pause" class="tb-btn" type="button">Pause</button>
+      <button id="btn-addtime" class="tb-btn" type="button">+15s</button>
+      <button id="btn-cancel" class="tb-btn" type="button">Cancel draft</button>
+    </div>
+    <div id="spectate-chip" hidden><span class="dot"></span>Spectating</div>
   </div>
+
   <div id="game-body">
     <section id="stage-col">
-      <div id="lot-zone" hidden>
-        <div id="lot-slot"></div>
-        <div id="showdown" hidden>
-          <div class="sd-head">
-            <span id="sd-banner"></span>
-            <span id="sd-clock" class="countdown"></span>
+      <div id="reclaim-banner" hidden>
+        <span class="emoji">🔁</span>
+        <div class="info">
+          <div class="title">Your team is on autopilot</div>
+          <div class="sub">You went quiet for 10 lots. Your roster fills free at the end unless you
+            take the wheel.</div>
+        </div>
+        <button id="btn-reclaim" type="button">Reclaim my team</button>
+      </div>
+
+      <div id="stage-scroll">
+        <!-- Auction: lot + clock + current bid -->
+        <div id="auction-view" hidden>
+          <div class="lot-header">
+            <div class="left">
+              <span id="lot-label"></span>
+              <span id="lot-lastcall" hidden>🔔 Last call</span>
+            </div>
+            <span id="lot-right"></span>
           </div>
-          <form id="sd-form" hidden>
-            <input id="sd-guess" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="1–100" aria-label="Your secret number">
-            <button id="sd-lock" type="submit" class="primary">🔒 Lock in</button>
-          </form>
-          <div id="sd-note" class="muted small"></div>
+          <div class="lot-grid">
+            <div id="lot-card-wrap"></div>
+            <div class="lot-side">
+              <div id="clock-panel">
+                <div class="clock-ring">
+                  <svg viewBox="0 0 100 100">
+                    <circle class="track" cx="50" cy="50" r="44" fill="none" stroke-width="6"></circle>
+                    <circle class="fg" id="clock-ringfg" cx="50" cy="50" r="44" fill="none"
+                      stroke-width="6" stroke-linecap="round"
+                      stroke-dasharray="276.5" stroke-dashoffset="0"></circle>
+                  </svg>
+                  <div class="clock-center">
+                    <div>
+                      <div id="clock-num"></div>
+                      <div id="clock-cap">On the lot</div>
+                    </div>
+                  </div>
+                </div>
+                <div id="clock-snipe" hidden>Soft close · bids add +5s</div>
+              </div>
+              <div class="curbid-panel">
+                <div class="eyebrow">Current bid</div>
+                <div id="curbid-amount"></div>
+                <div id="curbid-leader"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div id="bidbar">
-          <button class="bid-quick" data-inc="1">+$1</button>
-          <button class="bid-quick" data-inc="2">+$2</button>
-          <button class="bid-quick" data-inc="5">+$5</button>
-          <form id="bid-form">
-            <input id="bid-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="$…">
-            <button id="bid-custom" type="submit">Bid</button>
-          </form>
-          <span id="bid-note" class="muted small"></span>
+
+        <!-- All-in showdown takeover + reveal -->
+        <div id="showdown-view" hidden>
+          <div class="sd-head">
+            <div class="sd-emoji">🎰</div>
+            <div class="sd-title">All-in showdown</div>
+            <div id="sd-sub"></div>
+          </div>
+          <div id="sd-live">
+            <div class="sd-pill" style="justify-content:center">
+              <span class="lbl">Draw in</span>
+              <span id="sd-clock"></span>
+            </div>
+          </div>
+          <div id="sd-seats"></div>
+          <div id="sd-panel" hidden>
+            <div id="sd-title"></div>
+            <div id="sd-hint"></div>
+            <form id="sd-form">
+              <input id="sd-guess" type="number" min="1" max="100" step="1"
+                inputmode="numeric" placeholder="1–100" aria-label="Your secret number">
+              <button id="sd-lock" type="submit"></button>
+            </form>
+            <div id="sd-break-row" hidden>
+              <span class="note">You've got more money than the price. Outbid and the
+                whole lottery evaporates.</span>
+              <button id="sd-break" class="break-btn" type="button"></button>
+            </div>
+          </div>
+          <div id="sd-watch" hidden>
+            <span id="sd-watch-label"></span>
+            <button id="sd-outbid" class="break-btn" type="button" hidden></button>
+          </div>
+          <div id="sd-reveal" hidden></div>
+        </div>
+
+        <!-- Free-pick endgame -->
+        <div id="freepick-view" hidden>
+          <div class="stage-banner fp-banner">
+            <div class="info">
+              <div class="title" id="fp-title"></div>
+              <div class="sub" id="fp-sub"></div>
+            </div>
+            <div class="clock-box">
+              <div class="clock-num" id="fp-clock"></div>
+              <div class="clock-cap">Per pick</div>
+            </div>
+          </div>
+          <div class="pool-scroll"><div id="fp-grid" class="pool-grid"></div></div>
+        </div>
+
+        <!-- Snake draft (fully playable — deviation from the handoff's
+             "next round" placeholder, styled within its token system) -->
+        <div id="snake-view" hidden>
+          <div class="stage-banner turn-banner">
+            <div class="info">
+              <div class="title" id="sn-title"></div>
+              <div class="sub" id="sn-sub"></div>
+            </div>
+            <div class="clock-box">
+              <div class="clock-num" id="sn-clock"></div>
+              <div class="clock-cap">On the clock</div>
+            </div>
+          </div>
+          <div class="pool-scroll"><div id="sn-grid" class="pool-grid"></div></div>
+        </div>
+
+        <!-- Lineup window -->
+        <div id="lineup-view" hidden>
+          <div class="lu-head">
+            <div class="lu-title">Set your lineup</div>
+            <div class="lu-sub" id="lu-sub">Drag a card onto another, or tap one then tap
+              two. Any player fits any slot.</div>
+          </div>
+          <div class="lu-clock-row">
+            <span class="lbl">Locks in</span>
+            <span id="lu-clock"></span>
+          </div>
+          <div id="lu-grid"></div>
+        </div>
+
+        <!-- Completion + sim output -->
+        <div id="done-view" hidden>
+          <div class="done-head">
+            <div class="emoji">🏆</div>
+            <div class="done-title">Books are closed</div>
+            <div id="done-sub"></div>
+          </div>
+          <div id="final-boards"></div>
+          <div id="sim-area"></div>
+        </div>
+
+        <!-- Paused overlay -->
+        <div id="paused-overlay" hidden>
+          <div class="pause-box">
+            <div class="pause-bars"><span></span><span></span></div>
+            <div class="pause-title">Paused</div>
+            <div id="pause-sub"></div>
+          </div>
         </div>
       </div>
-      <div id="stage"></div>
+
+      <!-- Pinned bid bar -->
+      <div id="bidbar" hidden>
+        <div id="err-toast" hidden></div>
+        <div class="bidbar-row">
+          <div class="bank">
+            <div class="eyebrow">Your bankroll</div>
+            <div class="bank-line">
+              <span id="bank-amount"></span>
+              <span id="bank-slots"></span>
+            </div>
+          </div>
+          <div id="bid-active" hidden>
+            <button class="bid-quick" type="button" data-inc="1">+$1</button>
+            <button class="bid-quick" type="button" data-inc="2">+$2</button>
+            <button class="bid-quick" type="button" data-inc="5">+$5</button>
+            <div class="bid-rule"></div>
+            <form id="bid-form">
+              <input id="bid-amount" type="number" min="1" step="1" inputmode="numeric">
+              <button id="bid-submit" type="submit">Bid</button>
+            </form>
+            <button id="btn-allin" type="button"></button>
+          </div>
+          <div id="bid-blocked" hidden>
+            <span id="blk-dot"></span>
+            <div>
+              <div id="blk-title"></div>
+              <div id="blk-sub"></div>
+            </div>
+          </div>
+          <div id="bid-exact" hidden>
+            <div class="info">
+              <div class="title">Your stack is exactly the bid</div>
+              <div class="sub">Match it and it becomes a lottery instead of a rejection.</div>
+            </div>
+            <button id="btn-force" type="button"></button>
+          </div>
+        </div>
+      </div>
     </section>
-    <aside id="side">
-      <div class="panel side-panel">
-        <h3>📋 Board</h3>
-        <div id="board"></div>
+
+    <aside id="rail">
+      <div class="rail-head">
+        <span class="rail-title">The board</span>
+        <span class="rail-sub">all public</span>
       </div>
-      <div class="panel side-panel">
-        <h3>📜 Feed</h3>
-        <div id="feed"></div>
+      <div id="board"></div>
+      <div class="rail-head feed-head">
+        <span class="rail-title">Feed</span>
+        <span class="rail-sub">live</span>
       </div>
+      <div id="feed"></div>
     </aside>
   </div>
 </main>
 
-<div id="toasts"></div>
-
-<div id="pause-overlay" hidden>
-  <div class="pause-box">
-    <div class="pause-icon">⏸️</div>
-    <div class="pause-text">Draft paused</div>
-    <button id="btn-resume" class="primary" hidden>▶️ Resume</button>
+<!-- ===================================================== ROOM CLOSED -->
+<main id="closed" hidden>
+  <div class="closed-box">
+    <div class="closed-glyph">$</div>
+    <div id="closed-title"></div>
+    <div id="closed-sub"></div>
+    <button id="btn-closed-home" type="button">Open a new room</button>
   </div>
-</div>
+</main>
 
 <script type="module" src="/app.js"></script>
 </body>

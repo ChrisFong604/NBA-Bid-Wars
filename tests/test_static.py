@@ -1,5 +1,5 @@
 """Static frontend guards: the no-build webapp assets must stay parseable
-and keep the wire-contract hooks (mode select, snake view, blind masking)
+and keep the wire-contract hooks (mode tiles, snake view, blind masking)
 they were built against. String-level checks on purpose — there is no JS
 test runner in this project, and these catch accidental deletions of the
 dictated protocol fields."""
@@ -25,16 +25,27 @@ def test_app_js_parses():
 
 
 def test_create_form_offers_the_three_modes():
-    assert 'id="c-mode"' in INDEX_HTML
+    # The handoff's create card uses mode tiles, not a <select>.
     for value in ("auction", "blind", "snake"):
-        assert f'value="{value}"' in INDEX_HTML
-    # Snake note shown when the budget input is disabled.
+        assert f'data-mode="{value}"' in INDEX_HTML
+    # Snake swaps the budget control for the gold LOCK notice.
     assert 'id="c-budget-note"' in INDEX_HTML
     assert "$15 fixed" in INDEX_HTML
 
 
-def test_create_post_sends_mode():
-    assert 'mode: $("c-mode").value' in APP_JS
+def test_create_post_sends_all_options():
+    assert "mode: S.create.mode" in APP_JS
+    assert "pool_depth: S.create.depth" in APP_JS
+    assert "sim: S.create.sim" in APP_JS
+    for field in ("budget:", "clock:", "lineup:", "cpus:", "era_from:", "era_to:"):
+        assert field in APP_JS
+
+
+def test_fonts_are_vendored_never_google():
+    assert '"/fonts.css"' in INDEX_HTML
+    assert "fonts.googleapis.com" not in INDEX_HTML
+    assert "fonts.gstatic.com" not in INDEX_HTML
+    assert "googleapis" not in STYLE_CSS
 
 
 def test_blind_masking_hooks():
