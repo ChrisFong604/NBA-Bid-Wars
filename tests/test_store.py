@@ -58,7 +58,7 @@ def test_old_style_config_snapshot_loads(tmp_path):
     Pre-lineup-phase snapshots also omit lineup_seconds/lineup_deadline —
     defaults must fill both. Pre-pool-depth snapshots omit
     ``config.pool_depth`` and ``rank`` on every serialized player — the
-    Config/Player defaults ("deep" / 10) must fill both."""
+    Config/Player defaults ("legends" / 10) must fill both."""
     state = rich_state()
     payload = {"state": state_to_dict(state), "meta": {"thread_id": 3}}
     cfg = payload["state"]["config"]
@@ -76,7 +76,7 @@ def test_old_style_config_snapshot_loads(tmp_path):
     assert loaded.config.lot_seconds == 30  # default fills the missing key
     assert loaded.config.lineup_seconds == 60  # default fills the missing key
     assert loaded.lineup_deadline == 0.0  # default fills the missing key
-    assert loaded.config.pool_depth == "deep"  # default fills the missing key
+    assert loaded.config.pool_depth == "legends"  # default fills the missing key
     assert loaded.config.sim == "ai"  # True -> "ai"
     assert not hasattr(loaded.config, "pool_extra")
     assert all(p.rank == 10 for p in loaded.queue)  # Player default fills rank

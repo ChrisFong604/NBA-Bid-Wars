@@ -31,7 +31,7 @@ gets `{room, token, user_id}`; `POST /api/rooms/{code}/join` with
 pre-seeded with that many computer opponents, applied right after creation
 as an `AddCpu` event through the normal dispatch (the engine gates
 capacity, not the server). It also accepts `"pool_depth"`
-(`"legends"` | `"household"` | `"deep"`, default `"deep"`): how deep the
+(`"legends"` | `"household"` | `"deep"`, default `"legends"`): how deep the
 player pool goes — legends only (~20 per era), household names (~35), or
 the full pool (~50 incl. the role-player tier).
 
@@ -55,8 +55,8 @@ NEVER serialize `state.queue` contents. The hidden pool is the whole game.
 ```json
 {
   "phase": "auction", "you": 3, "commissioner": 1,
-  "config": {"budget": 20, "lot_seconds": 30, "era_start": 1960,
-              "era_end": 2020, "pool_depth": "deep", "sim": "prompt",
+  "config": {"budget": 20, "lot_seconds": 30, "era_start": 2000,
+              "era_end": 2020, "pool_depth": "legends", "sim": "prompt",
               "lineup_seconds": 60},
   "queue_count": 12,
   "managers": [{"id": 1, "name": "Chris", "budget": 7, "autopilot": false,

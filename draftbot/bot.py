@@ -685,9 +685,9 @@ def register_commands(bot: DraftBot) -> None:
         budget="Starting budget per manager (default $20)",
         clock="Seconds each player stays on the block — a bid in the last 10s adds 5s (default 30)",
         lineup="Seconds to arrange lineups after the last roster fills — 0 skips it (default 60)",
-        era_from="Earliest era in the player pool (default 1960s)",
+        era_from="Earliest era in the player pool (default 2000s)",
         era_to="Latest era in the player pool (default 2020s)",
-        pool="How deep the pool goes: legends ~20/era, household ~35/era, deep ~50/era (default deep)",
+        pool="How deep the pool goes: legends ~20/era, household ~35/era, deep ~50/era (default legends)",
         sim="Post-draft tournament sim mode (default: prompt for your own LLM)",
     )
     @app_commands.choices(
@@ -710,9 +710,9 @@ def register_commands(bot: DraftBot) -> None:
         budget: app_commands.Range[int, 1, 1000] = 20,
         clock: app_commands.Range[int, 15, 300] = 30,
         lineup: app_commands.Range[int, 0, 300] = 60,
-        era_from: int = 1960,
+        era_from: int = 2000,
         era_to: int = 2020,
-        pool: str = "deep",
+        pool: str = "legends",
         sim: str = "prompt",  # shadows the sim module only inside this closure
     ) -> None:
         channel = interaction.channel

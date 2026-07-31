@@ -7,10 +7,11 @@ from draftbot.models import Config
 ALLOWED_OVERRIDES = {"setup_hook", "on_ready"}
 
 
-def test_default_pool_depth_is_deep():
-    # /draft create's `pool` option and the web create form both default to
-    # "deep" — a Config built with no explicit depth keeps current behavior.
-    assert Config().pool_depth == "deep"
+def test_default_pool_and_era():
+    # /draft create's options and the web create form both default to the
+    # legends pool from the 2000s onward — Config() must agree.
+    assert Config().pool_depth == "legends"
+    assert (Config().era_start, Config().era_end) == (2000, 2020)
 
 
 def test_no_accidental_client_shadowing():

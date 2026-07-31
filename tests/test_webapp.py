@@ -116,9 +116,9 @@ def test_create_room_pool_depth_roundtrips_into_config(client):
     room = registry.get(resp.json()["room"])
     assert room.state.config.pool_depth == "legends"
     assert views.state_view(room.state, None)["config"]["pool_depth"] == "legends"
-    # omitted -> the "deep" default (current behavior unchanged)
+    # omitted -> the "legends" default
     resp = client.post("/api/rooms", json={"name": "Bob"})
-    assert registry.get(resp.json()["room"]).state.config.pool_depth == "deep"
+    assert registry.get(resp.json()["room"]).state.config.pool_depth == "legends"
 
 
 def test_join_and_full_lobby(client):

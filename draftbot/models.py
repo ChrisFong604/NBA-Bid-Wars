@@ -34,9 +34,9 @@ class Player:
 class Config:
     budget: int = 20
     slots: tuple[str, ...] = SLOTS
-    era_start: int = 1960  # decade anchors, inclusive; host picks in
+    era_start: int = 2000  # decade anchors, inclusive; host picks in
     era_end: int = 2020  # 10-year increments on /draft create
-    pool_depth: str = "deep"  # "legends" (rank<=4) | "household" (<=7) | "deep" (all)
+    pool_depth: str = "legends"  # "legends" (rank<=4) | "household" (<=7) | "deep" (all)
     lot_seconds: int = 30  # clock per lot; only late bids extend it (soft close)
     snipe_window: float = 10.0  # a bid this close to the deadline...
     snipe_extend: float = 5.0  # ...pushes the deadline out by this much

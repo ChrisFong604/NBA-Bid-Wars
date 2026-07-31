@@ -518,7 +518,7 @@ def test_pre_era_snapshot_loads_with_dataclass_defaults(tmp_path):
     path.write_text(json.dumps(payload), encoding="utf-8")
     loaded, meta = store.load_snapshot(path)
     assert meta == {"thread_id": 7}
-    assert (loaded.config.era_start, loaded.config.era_end) == (1960, 2020)
+    assert (loaded.config.era_start, loaded.config.era_end) == (2000, 2020)
     players = (loaded.lot.player,) + loaded.queue
     assert all(p.decade == 2020 and p.prime == "" for p in players)
     # everything else survives untouched

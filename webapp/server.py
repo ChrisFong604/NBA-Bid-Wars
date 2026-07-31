@@ -97,7 +97,7 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
     clock = _int_option(body, "clock", 30, 15, 300)
     lineup = _int_option(body, "lineup", 60, 0, 300)
     cpus = _int_option(body, "cpus", 0, 0, 8)
-    era_from = _era_option(body, "era_from", 1960)
+    era_from = _era_option(body, "era_from", 2000)
     era_to = _era_option(body, "era_to", 2020)
     if era_from > era_to:
         raise _bad(
@@ -107,7 +107,7 @@ async def create_room(body: dict = Body(...)) -> dict[str, Any]:
     sim_mode = body.get("sim", "prompt")
     if sim_mode not in SIM_MODES:
         raise _bad(f"sim must be one of: {', '.join(SIM_MODES)}.")
-    pool_depth = body.get("pool_depth", "deep")
+    pool_depth = body.get("pool_depth", "legends")
     if pool_depth not in POOL_DEPTHS:
         raise _bad(f"pool_depth must be one of: {', '.join(POOL_DEPTHS)}.")
     config = Config(
