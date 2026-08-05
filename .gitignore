@@ -5,3 +5,4 @@ __pycache__/
 snapshots/
 .env
 scripts/.cache/
+webapp/static/headshots/

@@ -112,6 +112,20 @@ and installs a systemd unit that restarts the bot on crash and boot. For a
 private GitHub repo, clone with a fine-grained token URL
 (`https://<token>@github.com/you/nba-draft-bot.git`) or make the repo public.
 
+### Player headshots
+
+Headshots are **not committed** (licensed press imagery — keep it out of the
+public repo). After deploying, populate them once with:
+
+```bash
+uv run python scripts/fetch_headshots.py
+```
+
+It downloads ~324 of the 350 players from Basketball-Reference into
+`webapp/static/headshots/<player-id>.jpg` at a polite 3.5 s/request
+(~20 min), skips files that already exist, and lists the players bbref has
+no photo for. The webapp works fine without them until you wire up a UI.
+
 ## How to play
 
 1. `/draft create` in a text channel — options: `budget` (default $20),
